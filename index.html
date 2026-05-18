@@ -241,6 +241,7 @@ body{font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;b
     <div class="topbar-right">
       <span class="user-chip" id="userChip"></span>
       <span class="sync-badge" id="syncBadge" onclick="openSetup()" title="点击配置云同步">⚡ 本地</span>
+      <button class="btn btn-ghost" id="syncBtn" style="font-size:.75rem;padding:5px 10px;display:none" onclick="manualSync()" title="立即从云端拉取最新数据">🔄 同步</button>
       <button class="btn btn-ghost" style="font-size:.75rem;padding:5px 10px" onclick="logout()">退出</button>
     </div>
   </div>
@@ -326,12 +327,16 @@ let unsubscribe = null;
 async function initFirebase(config) {
   try {
     const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
-    const { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc, getDocs } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
     const app = getApps().length ? getApps()[0] : initializeApp(config);
     db = getFirestore(app);
-    window._fs = { collection, doc, setDoc, onSnapshot, deleteDoc };
+    window._fs = { collection, doc, setDoc, onSnapshot, deleteDoc, getDocs };
     return true;
-  } catch(e) { console.error(e); return false; }
+  } catch(e) {
+    console.error('Firebase init error:', e);
+    showToast('Firebase 连接失败：' + (e.message||e), 4000);
+    return false;
+  }
 }
 
 // ─── STORAGE LAYER ─────────────────────────────────────
@@ -394,18 +399,64 @@ function startSync() {
   if (!db) return;
   if (unsubscribe) unsubscribe();
   const { collection, onSnapshot } = window._fs;
-  unsubscribe = onSnapshot(collection(db, 'readings'), snap => {
-    const store = lsGet();
-    if (!store.readings) store.readings = {};
-    snap.docChanges().forEach(change => {
-      if (change.type === 'removed') delete store.readings[change.doc.id];
-      else store.readings[change.doc.id] = change.doc.data();
-    });
-    lsSet(store);
-    renderCurrent();
-  });
-  document.getElementById('syncBadge').textContent = '🟢 已同步';
-  document.getElementById('syncBadge').classList.add('on');
+  setBadge('⏳ 同步中…', false);
+  unsubscribe = onSnapshot(
+    collection(db, 'readings'),
+    snap => {
+      const store = lsGet();
+      if (!store.readings) store.readings = {};
+      snap.docChanges().forEach(change => {
+        if (change.type === 'removed') delete store.readings[change.doc.id];
+        else store.readings[change.doc.id] = change.doc.data();
+      });
+      lsSet(store);
+      setBadge('🟢 云同步', true);
+      renderCurrent();
+    },
+    err => {
+      console.error('Firestore error:', err);
+      setBadge('❌ 同步失败', false);
+      showToast('云同步出错：' + err.message, 4000);
+    }
+  );
+}
+
+function setBadge(text, on) {
+  const el = document.getElementById('syncBadge');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle('on', on);
+  const btn = document.getElementById('syncBtn');
+  if (btn) btn.style.display = on ? 'inline-block' : 'none';
+}
+
+async function manualSync() {
+  if (!db) { showToast('尚未连接云同步，请先配置 Firebase'); return; }
+  const btn = document.getElementById('syncBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 同步中…'; }
+  try {
+    const { collection, getDocs } = window._fs;
+    // getDocs may not be imported yet; fall back to re-running startSync
+    if (getDocs) {
+      const snap = await getDocs(collection(db, 'readings'));
+      const store = lsGet();
+      store.readings = {};
+      snap.forEach(d => { store.readings[d.id] = d.data(); });
+      lsSet(store);
+      renderCurrent();
+      setBadge('🟢 云同步', true);
+      showToast('同步完成 🎉');
+    } else {
+      // re-subscribe to force a fresh snapshot
+      startSync();
+      showToast('正在重新连接同步…');
+    }
+  } catch(e) {
+    showToast('同步出错：' + e.message, 4000);
+    setBadge('❌ 同步失败', false);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 同步'; }
+  }
 }
 
 // ─── PARSER ────────────────────────────────────────────
@@ -1040,30 +1091,43 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelec
 document.addEventListener('dragover',e=>{e.preventDefault();document.getElementById('dragMask').classList.add('on');});
 document.addEventListener('dragleave',e=>{if(!e.relatedTarget)document.getElementById('dragMask').classList.remove('on');});
 document.addEventListener('drop',async e=>{
+  e.preventDefault();document.getElementById('dragMask').classList.remove('on');
+  const f=e.dataTransfer.files[0];
+  if(f&&f.name.endsWith('.md')){const text=await f.text();await importMd(text);}
+});
 
 // ─── EMBED CONFIG HELPER ────────────────────────────────
 window.embedFirebaseConfig = function(){
   const raw = document.getElementById('configInput').value.trim();
   let cfg; try{ cfg=JSON.parse(raw); }catch{ showToast('配置格式有误，请检查 JSON'); return; }
   if(!cfg.apiKey){ showToast('未找到 apiKey，请重新复制配置'); return; }
-  // Read current page HTML and replace the PRESET_FIREBASE_CONFIG line
+  // Replace PRESET_FIREBASE_CONFIG in the page source
   const src = document.documentElement.outerHTML;
-  const replaced = src.replace(
-    /const PRESET_FIREBASE_CONFIG = null;/,
-    'const PRESET_FIREBASE_CONFIG = ' + JSON.stringify(cfg, null, 2) + ';'
-  );
-  // Download as file
+  // Find marker comment and replace until the closing line
+  const startMarker = '// ─── ★ Firebase 配置';
+  const endMarker = '// ────────────────────────────────────────────────────────';
+  const si = src.indexOf(startMarker);
+  const ei = src.indexOf(endMarker, si);
+  let replaced;
+  if(si !== -1 && ei !== -1){
+    replaced = src.slice(0, si)
+      + startMarker + '（已写入，上传 GitHub 即可多人共享）───\nconst PRESET_FIREBASE_CONFIG = '
+      + JSON.stringify(cfg) + ';\n'
+      + src.slice(ei);
+  } else {
+    // fallback: regex
+    replaced = src.replace(/const PRESET_FIREBASE_CONFIG = [\s\S]*?;(\s*\/\/)/,
+      'const PRESET_FIREBASE_CONFIG = ' + JSON.stringify(cfg) + ';$1');
+  }
   const blob = new Blob([replaced], {type:'text/html'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'bookmark-house.html';
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
   showToast('已下载！把这个 HTML 上传到 GitHub 就能用 🎉');
-}
-  e.preventDefault();document.getElementById('dragMask').classList.remove('on');
-  const f=e.dataTransfer.files[0];
-  if(f&&f.name.endsWith('.md')){const text=await f.text();await importMd(text);}
-});
+};
 
 // ─── HELPERS ────────────────────────────────────────────
 function setMain(html){document.getElementById('mainContent').innerHTML=html;}
