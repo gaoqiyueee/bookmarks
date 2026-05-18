@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📚 书签小屋</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#f5f0e8;--card:#fff;--text:#2d2416;--sub:#7a6a56;
+  --accent:#c8763a;--accent2:#f4c87a;--accent-l:#fef3e8;--accent-d:#a85e28;
+  --border:#e8ddd0;--sh:0 4px 20px rgba(0,0,0,.08);--sh2:0 16px 48px rgba(0,0,0,.16);
+  --r:14px;--rs:9px;--nav-h:60px;
+}
+body{font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+/* ——————— LOGIN ——————— */
+#loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(155deg,#1a0f06 0%,#3d2010 45%,#6b3a1f 80%,#9b5a30 100%)}
+.login-card{background:#fff;border-radius:24px;padding:52px 48px;width:min(440px,90vw);text-align:center;box-shadow:0 32px 80px rgba(0,0,0,.35)}
+.login-logo{font-size:3.5rem;margin-bottom:16px;line-height:1}
+.login-title{font-size:1.75rem;font-weight:800;color:var(--text);margin-bottom:6px}
+.login-sub{font-size:.92rem;color:var(--sub);margin-bottom:36px}
+.login-label{display:block;font-size:.82rem;color:var(--sub);text-align:left;margin-bottom:7px;letter-spacing:.5px}
+.login-input{width:100%;padding:13px 16px;border:2px solid var(--border);border-radius:var(--rs);font-size:1rem;outline:none;transition:border .2s;color:var(--text)}
+.login-input:focus{border-color:var(--accent)}
+.login-btn{width:100%;margin-top:18px;padding:13px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:var(--rs);font-size:1rem;font-weight:700;cursor:pointer;transition:all .2s}
+.login-btn:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(200,118,58,.4)}
+.login-hint{font-size:.78rem;color:#aaa;margin-top:16px}
+/* ——————— APP SHELL ——————— */
+#app{display:none;min-height:100vh;flex-direction:column}
+.topbar{height:var(--nav-h);background:linear-gradient(90deg,#1a0f06,#5c3317);display:flex;align-items:center;padding:0 28px;gap:16px;position:sticky;top:0;z-index:200;box-shadow:0 2px 12px rgba(0,0,0,.3)}
+.topbar-logo{font-size:1.2rem;font-weight:800;color:#f4c87a;white-space:nowrap}
+.topbar-nav{display:flex;gap:4px;flex:1;justify-content:center}
+.nav-btn{background:none;border:none;color:rgba(255,255,255,.6);padding:8px 18px;border-radius:20px;cursor:pointer;font-size:.88rem;transition:all .2s;white-space:nowrap}
+.nav-btn.active,.nav-btn:hover{background:rgba(244,200,122,.15);color:var(--accent2)}
+.nav-btn.active{font-weight:600}
+.topbar-right{display:flex;align-items:center;gap:10px;white-space:nowrap}
+.user-chip{background:rgba(244,200,122,.2);color:var(--accent2);padding:6px 14px;border-radius:20px;font-size:.82rem;font-weight:600}
+.sync-badge{font-size:.72rem;padding:3px 9px;border-radius:10px;background:rgba(255,255,255,.1);color:rgba(255,255,255,.5);cursor:pointer}
+.sync-badge.on{background:rgba(100,220,100,.15);color:#6ddc8a}
+/* ——————— MAIN ——————— */
+.main{flex:1;padding:32px 40px;max-width:1500px;margin:0 auto;width:100%}
+/* ——————— IMPORT BAR ——————— */
+.import-bar{background:#fff;border:2px dashed var(--border);border-radius:var(--r);padding:20px 28px;display:flex;align-items:center;gap:16px;margin-bottom:28px;transition:border-color .2s;cursor:pointer}
+.import-bar:hover{border-color:var(--accent)}
+.import-bar-icon{font-size:2rem;flex-shrink:0}
+.import-bar-text{flex:1}
+.import-bar-title{font-weight:700;margin-bottom:3px;font-size:.95rem}
+.import-bar-sub{font-size:.8rem;color:var(--sub)}
+.btn{padding:9px 20px;border:none;border-radius:var(--rs);cursor:pointer;font-size:.85rem;font-weight:600;transition:all .2s}
+.btn-accent{background:var(--accent);color:#fff}
+.btn-accent:hover{background:var(--accent-d);transform:translateY(-1px);box-shadow:0 4px 12px rgba(200,118,58,.3)}
+.btn-ghost{background:var(--bg);color:var(--sub);border:1px solid var(--border)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm{padding:5px 12px;font-size:.78rem}
+/* ——————— STATS ROW ——————— */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px}
+.stat-card{background:var(--card);border-radius:var(--r);padding:20px;box-shadow:var(--sh);border:1px solid var(--border);text-align:center}
+.stat-card-icon{font-size:1.6rem;margin-bottom:8px}
+.stat-card-num{font-size:1.8rem;font-weight:800;color:var(--accent);line-height:1}
+.stat-card-lbl{font-size:.78rem;color:var(--sub);margin-top:4px}
+/* ——————— SECTION HEADER ——————— */
+.sec-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.sec-title{font-size:1rem;font-weight:700;display:flex;align-items:center;gap:8px}
+.sec-title-dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+/* ——————— BOOK CARDS ——————— */
+.books-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px}
+.book-card{background:var(--card);border-radius:var(--r);overflow:hidden;box-shadow:var(--sh);border:1px solid var(--border);cursor:pointer;transition:all .25s cubic-bezier(.34,1.56,.64,1)}
+.book-card:hover{transform:translateY(-5px) scale(1.01);box-shadow:var(--sh2)}
+.book-cover{height:110px;position:relative;display:flex;align-items:flex-end;padding:14px 16px;overflow:hidden}
+.book-cover::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 30%,rgba(0,0,0,.45))}
+.book-cover-text{position:relative;z-index:1}
+.book-cover-title{font-size:1.15rem;font-weight:800;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.5);line-height:1.3}
+.book-cover-author{font-size:.75rem;color:rgba(255,255,255,.75);margin-top:2px}
+.book-ribbon{position:absolute;top:0;right:20px;width:18px;height:30px;background:rgba(255,255,255,.22);clip-path:polygon(0 0,100% 0,100% 75%,50% 100%,0 75%);z-index:1}
+.book-body{padding:16px 18px}
+.book-desc{font-size:.83rem;color:var(--sub);line-height:1.6;margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.book-tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px}
+.tag{background:var(--accent-l);color:var(--accent);font-size:.72rem;padding:2px 9px;border-radius:12px;font-weight:500}
+.book-footer{display:flex;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid var(--border)}
+.book-time{font-size:.75rem;color:var(--sub)}
+.book-readers{display:flex;gap:-6px}
+.reader-avatar{width:26px;height:26px;border-radius:50%;font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center;color:#fff;border:2px solid #fff;margin-left:-6px;flex-shrink:0}
+.reader-avatar:first-child{margin-left:0}
+/* ——————— LEADERBOARD ——————— */
+.lb-section{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-bottom:28px}
+.lb-card{background:var(--card);border-radius:var(--r);padding:20px;box-shadow:var(--sh);border:1px solid var(--border)}
+.lb-card-title{font-size:.85rem;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:6px}
+.lb-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.lb-row:last-child{border-bottom:none}
+.lb-rank{width:24px;height:24px;border-radius:50%;font-size:.72rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.lb-rank-1{background:#f4c87a;color:#7a4a00}
+.lb-rank-2{background:#d8d8d8;color:#555}
+.lb-rank-3{background:#e8a060;color:#fff}
+.lb-rank-n{background:var(--bg);color:var(--sub)}
+.lb-name{flex:1;font-size:.88rem;font-weight:600}
+.lb-val{font-size:.82rem;color:var(--accent);font-weight:600}
+.lb-bar-wrap{width:100%;height:4px;background:var(--border);border-radius:2px;margin-top:3px}
+.lb-bar{height:4px;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;transition:width .5s}
+/* ——————— AUTHORS WALL ——————— */
+.authors-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
+.author-card{background:var(--card);border-radius:var(--r);padding:18px;box-shadow:var(--sh);border:1px solid var(--border);text-align:center;cursor:pointer;transition:all .2s}
+.author-card:hover{transform:translateY(-3px);box-shadow:var(--sh2);border-color:var(--accent)}
+.author-avatar{width:56px;height:56px;border-radius:50%;margin:0 auto 10px;font-size:1.4rem;font-weight:800;color:#fff;display:flex;align-items:center;justify-content:center}
+.author-name{font-size:.92rem;font-weight:700;margin-bottom:4px}
+.author-meta{font-size:.75rem;color:var(--sub)}
+.author-books-mini{font-size:.72rem;color:var(--accent);margin-top:4px}
+/* ——————— MODAL ——————— */
+.overlay{position:fixed;inset:0;background:rgba(10,5,2,.6);z-index:500;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);opacity:0;pointer-events:none;transition:opacity .25s}
+.overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--card);border-radius:20px;width:min(900px,94vw);max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,.3);transform:scale(.95) translateY(20px);transition:transform .3s cubic-bezier(.34,1.4,.64,1)}
+.overlay.open .modal{transform:scale(1) translateY(0)}
+.modal-top{flex-shrink:0}
+.modal-covbar{height:6px;width:100%}
+.modal-head{padding:22px 28px 18px;border-bottom:1px solid var(--border);position:relative}
+.modal-close{position:absolute;top:16px;right:16px;background:var(--bg);border:none;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:1rem;color:var(--sub);display:flex;align-items:center;justify-content:center}
+.modal-close:hover{background:var(--border)}
+.modal-title{font-size:1.5rem;font-weight:800;margin-bottom:3px}
+.modal-author-line{font-size:.88rem;color:var(--sub);margin-bottom:12px}
+.modal-desc{font-size:.88rem;line-height:1.7;background:var(--bg);padding:10px 14px;border-radius:8px;border-left:3px solid var(--accent);margin-bottom:12px;color:var(--text);transition:background .2s,box-shadow .2s}
+.modal-desc[contenteditable=true]:hover{background:#fef8f2;box-shadow:0 0 0 1.5px var(--accent)}
+.modal-desc[contenteditable=true]:focus{background:#fff;box-shadow:0 0 0 2px var(--accent);outline:none}
+.modal-meta-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.modal-time-badge{font-size:.78rem;color:var(--sub)}
+/* user tabs within modal */
+.user-tabs{display:flex;gap:8px;padding:14px 28px;border-bottom:1px solid var(--border);flex-wrap:wrap;background:var(--bg)}
+.user-tab{padding:7px 16px;border-radius:20px;border:1.5px solid var(--border);background:#fff;font-size:.82rem;cursor:pointer;transition:all .2s;font-weight:500}
+.user-tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.modal-body{padding:22px 28px 32px;overflow-y:auto;flex:1}
+/* bookmark cards */
+.ch-head{font-size:.75rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--sub);display:flex;align-items:center;gap:8px;margin:0 0 10px}
+.ch-head::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--border),transparent)}
+.bm{background:var(--bg);border:1px solid var(--border);border-radius:var(--rs);padding:14px 16px;margin-bottom:9px;transition:border-color .2s}
+.bm:hover{border-color:var(--accent)}
+.bm-orig{font-size:.9rem;line-height:1.85;border-left:3px solid var(--accent);padding-left:12px;color:var(--text)}
+.bm-thought-wrap{margin-top:9px;background:var(--accent-l);border-radius:7px;padding:8px 12px;display:flex;gap:6px;align-items:flex-start;min-height:36px}
+.bm-thought-icon{flex-shrink:0;font-size:.88rem;margin-top:1px}
+.bm-thought-text{font-size:.83rem;color:var(--accent-d);flex:1;outline:none;word-break:break-all}
+.bm-thought-text[contenteditable=true]{border-bottom:1px dashed var(--accent);min-width:40px}
+.bm-thought-hint{font-size:.75rem;color:#bbb;flex:1}
+.edit-actions{display:flex;gap:6px;margin-top:10px}
+/* setup guide */
+.setup-modal{width:min(600px,94vw)}
+.setup-step{display:flex;gap:14px;padding:16px 0;border-bottom:1px solid var(--border)}
+.setup-step:last-child{border-bottom:none}
+.step-num{width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-weight:800;font-size:.82rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+.step-body{flex:1}
+.step-title{font-weight:700;margin-bottom:4px}
+.step-desc{font-size:.83rem;color:var(--sub);line-height:1.6}
+.step-code{background:#1e1e1e;color:#d4d4d4;padding:10px 14px;border-radius:7px;font-size:.78rem;font-family:monospace;margin-top:8px;white-space:pre-wrap;word-break:break-all}
+.config-textarea{width:100%;height:140px;padding:12px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:monospace;font-size:.8rem;resize:vertical;outline:none;margin-top:6px}
+.config-textarea:focus{border-color:var(--accent)}
+/* toast */
+.toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(20px);background:#222;color:#fff;padding:10px 22px;border-radius:24px;font-size:.85rem;z-index:9999;opacity:0;transition:all .3s;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* drag */
+.drag-mask{position:fixed;inset:0;background:rgba(200,118,58,.1);border:4px dashed var(--accent);z-index:9000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(10px)}
+.drag-mask.on{display:flex}
+/* empty */
+.empty{text-align:center;padding:80px 40px;color:var(--sub)}
+.empty-icon{font-size:4rem;margin-bottom:16px;line-height:1}
+/* filter bar */
+.filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;align-items:center}
+.filter-pill{background:var(--card);border:1.5px solid var(--border);color:var(--sub);padding:5px 14px;border-radius:20px;cursor:pointer;font-size:.8rem;transition:all .2s}
+.filter-pill:hover,.filter-pill.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.search-wrap{position:relative;margin-left:auto}
+.search-inp{padding:7px 12px 7px 32px;border:1.5px solid var(--border);border-radius:20px;font-size:.82rem;background:var(--card);color:var(--text);outline:none;width:200px;transition:border-color .2s}
+.search-inp:focus{border-color:var(--accent);width:260px}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--sub);font-size:.85rem;pointer-events:none}
+/* bm user tag */
+.bm-owner{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.bm-owner-av{width:22px;height:22px;border-radius:50%;font-size:.66rem;font-weight:800;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.bm-owner-name{font-size:.78rem;font-weight:600;color:var(--sub)}
+.bm-owner-time{font-size:.72rem;color:#bbb;margin-left:auto}
+.bm.me{border-left:3px solid var(--accent)}
+.bm.other{border-left:3px solid #a0a0d0}
+/* reactions */
+.bm-actions{display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap}
+.react-btn{background:var(--bg);border:1.5px solid var(--border);border-radius:20px;padding:3px 10px;font-size:.78rem;cursor:pointer;transition:all .18s;display:flex;align-items:center;gap:3px}
+.react-btn:hover{border-color:var(--accent);background:var(--accent-l)}
+.react-btn.reacted{background:var(--accent-l);border-color:var(--accent);color:var(--accent-d);font-weight:600}
+.comment-toggle{background:none;border:none;font-size:.78rem;color:var(--sub);cursor:pointer;padding:3px 8px;border-radius:12px;transition:all .18s}
+.comment-toggle:hover{background:var(--bg);color:var(--accent)}
+/* comments */
+.bm-comments{margin-top:10px;border-top:1px solid var(--border);padding-top:10px;display:none}
+.bm-comments.open{display:block}
+.comment-item{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)}
+.comment-item:last-of-type{border-bottom:none}
+.comment-av{width:22px;height:22px;border-radius:50%;font-size:.66rem;font-weight:800;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.comment-body{flex:1}
+.comment-name{font-size:.74rem;font-weight:700;margin-bottom:2px}
+.comment-text{font-size:.82rem;color:var(--text);line-height:1.55;word-break:break-all}
+.comment-time{font-size:.7rem;color:#bbb;margin-left:6px}
+.comment-input-row{display:flex;gap:8px;margin-top:8px;align-items:center}
+.comment-inp{flex:1;border:1.5px solid var(--border);border-radius:20px;padding:6px 14px;font-size:.82rem;outline:none;transition:border-color .2s}
+.comment-inp:focus{border-color:var(--accent)}
+.comment-send{background:var(--accent);color:#fff;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:.9rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .18s}
+.comment-send:hover{background:var(--accent-d)}
+/* progress */
+.prog-bar{height:3px;background:var(--border);border-radius:2px;margin-top:10px;overflow:hidden}
+.prog-fill{height:3px;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .5s}
+/* responsive */
+@media(max-width:900px){
+  .main{padding:20px 16px}
+  .stats-row{grid-template-columns:repeat(2,1fr)}
+  .lb-section{grid-template-columns:1fr}
+  .topbar{padding:0 16px}
+  .topbar-nav{gap:0}
+  .nav-btn{padding:8px 10px;font-size:.78rem}
+  .modal-head,.modal-body{padding:18px 20px}
+}
+</style>
+</head>
+<body>
+
+<div class="drag-mask" id="dragMask"><div style="font-size:1.5rem;font-weight:700;color:var(--accent)">📚 松开导入书签文件</div></div>
+<div class="toast" id="toast"></div>
+
+<!-- ===== LOGIN ===== -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">📚</div>
+    <div class="login-title">书签小屋</div>
+    <div class="login-sub">记录阅读，分享书签，与朋友共读</div>
+    <label class="login-label" for="nameInput">你的昵称</label>
+    <input class="login-input" id="nameInput" placeholder="输入你的名字，如「小明」" maxlength="12">
+    <button class="login-btn" onclick="doLogin()">进入书屋 →</button>
+    <div class="login-hint">无需注册，名字即身份</div>
+  </div>
+</div>
+
+<!-- ===== APP ===== -->
+<div id="app" style="display:none;flex-direction:column">
+  <div class="topbar">
+    <div class="topbar-logo">📚 书签小屋</div>
+    <div class="topbar-nav">
+      <button class="nav-btn active" data-tab="plaza" onclick="switchTab('plaza')">🌐 广场</button>
+      <button class="nav-btn" data-tab="shelf" onclick="switchTab('shelf')">📚 我的书架</button>
+      <button class="nav-btn" data-tab="leaderboard" onclick="switchTab('leaderboard')">🏆 排行榜</button>
+      <button class="nav-btn" data-tab="authors" onclick="switchTab('authors')">✍️ 作者墙</button>
+    </div>
+    <div class="topbar-right">
+      <span class="user-chip" id="userChip"></span>
+      <span class="sync-badge" id="syncBadge" onclick="openSetup()" title="点击配置云同步">⚡ 本地</span>
+      <button class="btn btn-ghost" style="font-size:.75rem;padding:5px 10px" onclick="logout()">退出</button>
+    </div>
+  </div>
+  <div class="main" id="mainContent"></div>
+</div>
+
+<!-- ===== BOOK DETAIL MODAL ===== -->
+<div class="overlay" id="bookOverlay" onclick="closeOverlay('bookOverlay',event)">
+  <div class="modal" id="bookModal">
+    <div class="modal-top">
+      <div class="modal-covbar" id="bCovBar"></div>
+      <div class="modal-head">
+        <button class="modal-close" onclick="closeOverlay('bookOverlay')">✕</button>
+        <div class="modal-title" id="bTitle"></div>
+        <div class="modal-author-line" id="bAuthor"></div>
+        <div class="modal-desc" id="bDesc" style="display:none"></div>
+        <div class="modal-meta-row">
+          <div id="bTags" class="book-tags"></div>
+        </div>
+        <div id="bTimeSection" style="margin-top:12px"></div>
+        <div class="prog-bar" style="margin-top:8px" title="相对于所有书籍平均时长的比较"><div class="prog-fill" id="bProg" style="width:0%"></div></div>
+      </div>
+    </div>
+    <div class="user-tabs" id="bUserTabs"></div>
+    <div class="modal-body" id="bBody"></div>
+  </div>
+</div>
+
+<!-- ===== SETUP MODAL ===== -->
+<div class="overlay" id="setupOverlay" onclick="closeOverlay('setupOverlay',event)">
+  <div class="modal setup-modal">
+    <div class="modal-head" style="padding:22px 28px">
+      <button class="modal-close" onclick="closeOverlay('setupOverlay')">✕</button>
+      <div class="modal-title" style="font-size:1.2rem">⚡ 开启云同步（多人共享）</div>
+    </div>
+    <div class="modal-body" id="setupBody" style="padding:20px 28px">
+      <p style="font-size:.88rem;color:var(--sub);margin-bottom:20px">配置 Firebase 后，所有人打开同一页面数据实时同步。完全免费，按以下步骤操作：</p>
+      <div class="setup-step"><div class="step-num">1</div><div class="step-body"><div class="step-title">创建 Firebase 项目</div><div class="step-desc">访问 <a href="https://console.firebase.google.com" target="_blank" style="color:var(--accent)">console.firebase.google.com</a> → 点击「新增专案 / Add project」→ 输入项目名（如 bookmark-house）→ 关闭 Google Analytics → 建立。</div></div></div>
+      <div class="setup-step"><div class="step-num">2</div><div class="step-body"><div class="step-title">开启 Firestore 数据库</div><div class="step-desc">左侧菜单展开「<b>Build（构建）</b>」→ 点击「<b>Firestore Database</b>」→ 点击「<b>Create database（建立资料库）</b>」→ 选「<b>Start in test mode（测试模式）</b>」→ 区域选 <b>asia-east2</b>（香港）→ 点 Enable。<br><span style="color:#e08060;font-size:.78rem">⚠️ 测试模式 30 天后到期，到期前进 Rules 把日期改大就行：<code>allow read, write: if request.time &lt; timestamp.date(2099,1,1);</code></span></div></div></div>
+      <div class="setup-step"><div class="step-num">3</div><div class="step-body"><div class="step-title">获取配置代码</div><div class="step-desc">点左上角「齿轮图标 ⚙️」→「Project settings（项目设置）」→ 滚到「Your apps（您的应用程式）」→ 点「<b>&lt;/&gt;</b> 网页图标」→ 输入应用名称 → 点「Register app」→ 在 <code>firebaseConfig = { ... }</code> 里复制大括号内全部内容。</div></div></div>
+      <div class="setup-step"><div class="step-num">4</div><div class="step-body">
+        <div class="step-title">粘贴配置，保存即生效</div>
+        <div style="font-size:.8rem;color:var(--sub);margin-bottom:6px">粘贴后点「保存并连接」，右上角变成 🟢 已同步即成功。<br>如果要把配置<b>写进 HTML 文件一起放到 GitHub</b>，请看下方「写入文件」按钮。</div>
+        <textarea class="config-textarea" id="configInput" placeholder='{
+  "apiKey": "AIza...",
+  "authDomain": "xxx.firebaseapp.com",
+  "projectId": "xxx",
+  "storageBucket": "xxx.appspot.com",
+  "messagingSenderId": "123456",
+  "appId": "1:123:web:abc"
+}'></textarea>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn btn-accent" onclick="saveFirebaseConfig()">保存并连接（本设备）</button>
+          <button class="btn btn-ghost" onclick="embedFirebaseConfig()" title="把配置写入当前 HTML，上传 GitHub 后所有人自动连接">📋 复制已嵌入配置的 HTML</button>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept=".md" style="display:none" onchange="handleFileInput(event)">
+
+<script>
+// ╔══════════════════════════════════════════════════════╗
+// ║  书签小屋 v2.0  |  多用户 · 实时同步 · 排行榜        ║
+// ╚══════════════════════════════════════════════════════╝
+
+// ─── ★ Firebase 配置（已写入，上传 GitHub 即可多人共享）───
+const PRESET_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyA_RKqs76Ax67jCy48epCnFs5DCUdDsJfA",
+  authDomain: "bookmark-house-e2b44.firebaseapp.com",
+  projectId: "bookmark-house-e2b44",
+  storageBucket: "bookmark-house-e2b44.firebasestorage.app",
+  messagingSenderId: "525029649697",
+  appId: "1:525029649697:web:23e08334840f0462fe2260"
+};
+// ────────────────────────────────────────────────────────
+
+// ─── FIREBASE DYNAMIC LOADER ───────────────────────────
+let db = null;
+let unsubscribe = null;
+
+async function initFirebase(config) {
+  try {
+    const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+    const { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const app = getApps().length ? getApps()[0] : initializeApp(config);
+    db = getFirestore(app);
+    window._fs = { collection, doc, setDoc, onSnapshot, deleteDoc };
+    return true;
+  } catch(e) { console.error(e); return false; }
+}
+
+// ─── STORAGE LAYER ─────────────────────────────────────
+const LS_KEY = 'bookmarkHouse_v2';
+let _memStore = {}; // fallback when localStorage unavailable
+
+function lsGet() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); }
+  catch { return JSON.parse(JSON.stringify(_memStore)); }
+}
+function lsSet(data) {
+  _memStore = JSON.parse(JSON.stringify(data));
+  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch {}
+}
+
+async function saveReading(reading) {
+  // localStorage
+  const store = lsGet();
+  if (!store.readings) store.readings = {};
+  const id = reading.id;
+  store.readings[id] = reading;
+  lsSet(store);
+  // Firebase
+  if (db) {
+    const { doc, setDoc } = window._fs;
+    await setDoc(doc(db, 'readings', id), reading);
+  }
+}
+
+async function deleteReading(id) {
+  const store = lsGet();
+  if (store.readings) delete store.readings[id];
+  lsSet(store);
+  if (db) {
+    const { doc, deleteDoc } = window._fs;
+    await deleteDoc(doc(db, 'readings', id));
+  }
+}
+
+function getAllReadings() {
+  const store = lsGet();
+  return Object.values(store.readings || {});
+}
+
+async function updateThought(readingId, bmIdx, thought) {
+  const store = lsGet();
+  if (store.readings && store.readings[readingId]) {
+    store.readings[readingId].bookmarks[bmIdx].thought = thought;
+    store.readings[readingId].updatedAt = Date.now();
+    lsSet(store);
+    if (db) {
+      const { doc, setDoc } = window._fs;
+      await setDoc(doc(db, 'readings', readingId), store.readings[readingId]);
+    }
+  }
+}
+
+// ─── FIREBASE REALTIME SYNC ────────────────────────────
+function startSync() {
+  if (!db) return;
+  if (unsubscribe) unsubscribe();
+  const { collection, onSnapshot } = window._fs;
+  unsubscribe = onSnapshot(collection(db, 'readings'), snap => {
+    const store = lsGet();
+    if (!store.readings) store.readings = {};
+    snap.docChanges().forEach(change => {
+      if (change.type === 'removed') delete store.readings[change.doc.id];
+      else store.readings[change.doc.id] = change.doc.data();
+    });
+    lsSet(store);
+    renderCurrent();
+  });
+  document.getElementById('syncBadge').textContent = '🟢 已同步';
+  document.getElementById('syncBadge').classList.add('on');
+}
+
+// ─── PARSER ────────────────────────────────────────────
+function parseMd(text) {
+  const books = [];
+  const parts = text.split(/\n(?=## )/);
+  for (const part of parts) {
+    if (!part.trim().startsWith('## ')) continue;
+    const lines = part.split('\n');
+    const b = { title:'', author:'', readingTime:'', notes:'', groups:[], bookmarks:[] };
+    const hm = lines[0].match(/^## (.+?) - (.+)$/);
+    if (hm) { b.title = hm[1].trim(); b.author = hm[2].trim(); }
+    else { b.title = lines[0].replace(/^## /, '').trim(); }
+    for (const line of lines) {
+      const tm = line.match(/\*\*阅读时长[：:]\*\*\s*(.+)/); if(tm) b.readingTime = tm[1].trim();
+      const nm = line.match(/\*\*书籍备注[：:]\*\*\s*(.+)/); if(nm) b.notes = nm[1].trim();
+      const gm = line.match(/\*\*分组[：:]\*\*\s*(.+)/); if(gm) b.groups = gm[1].split(',').map(s=>s.trim()).filter(Boolean);
+    }
+    for (const block of part.split(/\n---\n/)) {
+      const cm = block.match(/^#### (.+)$/m); if(!cm) continue;
+      const qi = block.indexOf('> **原文：**'); if(qi<0) continue;
+      const after = block.slice(qi+'> **原文：**'.length).split('\n');
+      let inQ=true, orig=[], th=[];
+      for(let i=0;i<after.length;i++){
+        const l=after[i];
+        if(inQ){ if(l.trim()===''&&i>0)inQ=false; else orig.push(l.startsWith('>')? l.replace(/^>\s*/,''):l); }
+        else if(l.trim()) th.push(l.trim());
+      }
+      const o = orig.join('\n').trim();
+      if(o) b.bookmarks.push({ chapter:cm[1].trim(), original:o, thought:th.join(' ').trim() });
+    }
+    if(b.title) books.push(b);
+  }
+  return books;
+}
+
+// ─── UTILS ─────────────────────────────────────────────
+const PALETTES = [
+  ['#3d1f0f','#8b5a2b'],['#0f2d45','#2c7bab'],['#1a3d1f','#4a9e5c'],
+  ['#3d1f3d','#8b5a9b'],['#1f3d3d','#4a9e9e'],['#3d3d1f','#9e9e4a'],
+  ['#3d2820','#a06040'],['#1a2840','#4a6090'],['#2a1040','#6040a0'],['#3a2010','#8a5030'],
+];
+function colorOf(s){ let h=0; for(let i=0;i<s.length;i++)h=Math.imul(31,h)+s.charCodeAt(i)|0; return PALETTES[Math.abs(h)%PALETTES.length]; }
+function avatarColor(s){ const c=colorOf(s); return c[1]; }
+function toMin(s){ if(!s)return 0; let m=0; const hr=s.match(/(\d+)小时/); if(hr)m+=+hr[1]*60; const mn=s.match(/(\d+)分钟?/); if(mn)m+=+mn[1]; const sc=s.match(/(\d+)秒/); if(sc)m+=+sc[1]/60; return m; }
+function fmtMin(m){ if(!m)return '—'; if(m<60)return Math.round(m)+'m'; const h=Math.floor(m/60),mm=Math.round(m%60); return mm?`${h}h${mm}m`:`${h}h`; }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function makeId(u,t,a){ return btoa(encodeURIComponent(`${u}||${t}||${a}`)).replace(/[+/=]/g,'_').slice(0,40); }
+function bookKey(t,a){ return `${t}__${a}`; }
+function showToast(msg,dur=2200){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),dur); }
+
+// ─── STATE ─────────────────────────────────────────────
+let currentUser = '';
+let currentTab = 'plaza';
+let currentBookKey = null;
+let currentBookUser = null;
+let filterTag = null;
+let searchQ = '';
+
+// ─── AUTH ───────────────────────────────────────────────
+window.doLogin = function(){
+  const name = document.getElementById('nameInput').value.trim();
+  if(!name){ showToast('请输入你的昵称'); return; }
+  currentUser = name;
+  const store = lsGet();
+  store.currentUser = name;
+  lsSet(store);
+  bootApp();
+}
+
+window.logout = function(){
+  currentUser='';
+  document.getElementById('app').style.display='none';
+  document.getElementById('loginScreen').style.display='flex';
+}
+
+function bootApp(){
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('app').style.display='flex';
+  document.getElementById('userChip').textContent = '👤 '+currentUser;
+  // 优先用预填配置，其次用 localStorage 里保存的
+  const store = lsGet();
+  const cfg = PRESET_FIREBASE_CONFIG || store.firebaseConfig;
+  if(cfg){
+    initFirebase(cfg).then(ok=>{ if(ok) startSync(); });
+  }
+  switchTab('plaza');
+}
+
+// ─── TABS ───────────────────────────────────────────────
+window.switchTab = function(tab){
+  currentTab=tab; filterTag=null; searchQ='';
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  renderCurrent();
+}
+
+function renderCurrent(){ render[currentTab]&&render[currentTab](); }
+
+// ─── RENDER ─────────────────────────────────────────────
+const render = {
+  plaza() {
+    const readings = getAllReadings();
+    // Group by book
+    const bookMap = new Map();
+    for(const r of readings){
+      const k = bookKey(r.bookTitle, r.bookAuthor);
+      if(!bookMap.has(k)) bookMap.set(k,{title:r.bookTitle,author:r.bookAuthor,notes:r.notes,groups:r.groups,readings:[]});
+      bookMap.get(k).readings.push(r);
+    }
+    // Collect all tags
+    const allTags = [...new Set(readings.flatMap(r=>r.groups||[]))];
+    // Filter
+    let books = [...bookMap.values()];
+    if(filterTag) books = books.filter(b=>b.readings.some(r=>r.groups&&r.groups.includes(filterTag)));
+    if(searchQ){ const q=searchQ.toLowerCase(); books=books.filter(b=>(b.title+b.author+b.notes).toLowerCase().includes(q)||b.readings.some(r=>r.bookmarks.some(bm=>(bm.original+bm.thought).toLowerCase().includes(q)))); }
+
+    const html = `
+      <div class="stats-row" id="plazaStats"></div>
+      <div class="filter-bar">
+        <span style="font-size:.8rem;color:var(--sub)">筛选：</span>
+        <span class="filter-pill ${!filterTag?'active':''}" onclick="setFilter(null)">全部</span>
+        ${allTags.map(t=>`<span class="filter-pill ${filterTag===t?'active':''}" onclick="setFilter('${esc(t)}')">${esc(t)}</span>`).join('')}
+        <div class="search-wrap" style="margin-left:auto">
+          <span class="search-icon">🔍</span>
+          <input class="search-inp" id="searchInp" placeholder="搜索…" value="${esc(searchQ)}" oninput="onSearch(this.value)">
+        </div>
+      </div>
+      ${books.length===0?'<div class="empty"><div class="empty-icon">🌐</div><div style="font-weight:700;margin-bottom:6px">广场还很安静</div><div>导入你的书签，让朋友也来分享吧</div></div>':`
+      <div class="books-grid">
+        ${books.map(b=>renderBookCard(b,false)).join('')}
+      </div>`}
+    `;
+    setMain(html);
+    // stats
+    const uniqueUsers = [...new Set(readings.map(r=>r.userName))];
+    document.getElementById('plazaStats').innerHTML = [
+      {icon:'📚',num:bookMap.size,lbl:'共收录书籍'},
+      {icon:'👥',num:uniqueUsers.length,lbl:'位书友'},
+      {icon:'📌',num:readings.reduce((a,r)=>a+r.bookmarks.length,0),lbl:'条书签'},
+      {icon:'💭',num:readings.reduce((a,r)=>a+r.bookmarks.filter(bm=>bm.thought).length,0),lbl:'条想法'},
+    ].map(s=>`<div class="stat-card"><div class="stat-card-icon">${s.icon}</div><div class="stat-card-num">${s.num}</div><div class="stat-card-lbl">${s.lbl}</div></div>`).join('');
+  },
+
+  shelf() {
+    const all = getAllReadings();
+    const mine = all.filter(r=>r.userName===currentUser);
+    const allTags = [...new Set(mine.flatMap(r=>r.groups||[]))];
+    let list = mine;
+    if(filterTag) list=list.filter(r=>r.groups&&r.groups.includes(filterTag));
+    if(searchQ){ const q=searchQ.toLowerCase(); list=list.filter(r=>(r.bookTitle+r.bookAuthor+r.notes).toLowerCase().includes(q)); }
+    const totalMin = mine.reduce((a,r)=>a+toMin(r.readingTime),0);
+    const html = `
+      <div class="import-bar" onclick="document.getElementById('fileInput').click()">
+        <div class="import-bar-icon">📂</div>
+        <div class="import-bar-text">
+          <div class="import-bar-title">导入书签文件</div>
+          <div class="import-bar-sub">支持 .md 格式，或将文件拖拽到页面上</div>
+        </div>
+        <button class="btn btn-accent" onclick="event.stopPropagation();document.getElementById('fileInput').click()">选择文件</button>
+      </div>
+      <div class="stats-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
+        <div class="stat-card"><div class="stat-card-icon">📚</div><div class="stat-card-num">${mine.length}</div><div class="stat-card-lbl">本书</div></div>
+        <div class="stat-card"><div class="stat-card-icon">⏱</div><div class="stat-card-num">${fmtMin(totalMin)}</div><div class="stat-card-lbl">总阅读时长</div></div>
+        <div class="stat-card"><div class="stat-card-icon">📌</div><div class="stat-card-num">${mine.reduce((a,r)=>a+r.bookmarks.length,0)}</div><div class="stat-card-lbl">条书签</div></div>
+      </div>
+      <div class="filter-bar">
+        ${allTags.map(t=>`<span class="filter-pill ${filterTag===t?'active':''}" onclick="setFilter('${esc(t)}')">${esc(t)}</span>`).join('')}
+        <div class="search-wrap" style="margin-left:auto">
+          <span class="search-icon">🔍</span>
+          <input class="search-inp" id="searchInp" placeholder="搜索…" value="${esc(searchQ)}" oninput="onSearch(this.value)">
+        </div>
+      </div>
+      ${list.length===0?'<div class="empty"><div class="empty-icon">📖</div><div style="font-weight:700;margin-bottom:6px">还没有导入书签</div><div>点击上方按钮导入你的 .md 书签文件</div></div>':`
+      <div class="books-grid">
+        ${list.map(r=>{
+          const fakeBook={title:r.bookTitle,author:r.bookAuthor,notes:r.notes,groups:r.groups,readings:[r]};
+          return renderBookCard(fakeBook,true,r.id);
+        }).join('')}
+      </div>`}
+    `;
+    setMain(html);
+  },
+
+  leaderboard() {
+    const readings = getAllReadings();
+    const userMap = new Map();
+    for(const r of readings){
+      if(!userMap.has(r.userName)) userMap.set(r.userName,{name:r.userName,books:0,minutes:0,marks:0,thoughts:0});
+      const u=userMap.get(r.userName);
+      u.books++; u.minutes+=toMin(r.readingTime);
+      u.marks+=r.bookmarks.length; u.thoughts+=r.bookmarks.filter(bm=>bm.thought).length;
+    }
+    const users = [...userMap.values()];
+    const mkBoard = (arr,key,fmt,icon,lbl) => {
+      const sorted = [...arr].sort((a,b)=>b[key]-a[key]).slice(0,10);
+      const max = sorted[0]?.[key]||1;
+      return `<div class="lb-card">
+        <div class="lb-card-title">${icon} ${lbl}</div>
+        ${sorted.map((u,i)=>`
+          <div class="lb-row">
+            <div class="lb-rank lb-rank-${i<3?i+1:'n'}">${i+1}</div>
+            <div>
+              <div style="display:flex;justify-content:space-between">
+                <span class="lb-name" style="color:${u.name===currentUser?'var(--accent)':'var(--text)'}">${esc(u.name)}${u.name===currentUser?' 👈':''}</span>
+                <span class="lb-val">${fmt(u[key])}</span>
+              </div>
+              <div class="lb-bar-wrap"><div class="lb-bar" style="width:${Math.round(u[key]/max*100)}%"></div></div>
+            </div>
+          </div>`).join('')}
+        ${sorted.length===0?'<div style="color:var(--sub);font-size:.82rem;text-align:center;padding:20px">暂无数据</div>':''}
+      </div>`;
+    };
+    const html = `
+      <div style="margin-bottom:24px">
+        <div class="sec-title"><div class="sec-title-dot"></div>书友排行榜</div>
+        <p style="font-size:.82rem;color:var(--sub);margin-top:4px">基于所有已导入的书签数据计算，${users.length>0?`共 ${users.length} 位书友`:'快邀请朋友加入吧'}</p>
+      </div>
+      <div class="lb-section">
+        ${mkBoard(users,'minutes',fmtMin,'⏱','阅读时长榜')}
+        ${mkBoard(users,'books',v=>v+'本','📚','藏书量榜')}
+        ${mkBoard(users,'marks',v=>v+'条','📌','书签量榜')}
+      </div>
+      <div style="margin:28px 0 16px">
+        <div class="sec-title"><div class="sec-title-dot"></div>单本书阅读时长榜</div>
+        <p style="font-size:.82rem;color:var(--sub);margin-top:4px">每一行是一条阅读记录，按时长排序</p>
+      </div>
+      <div class="lb-card" style="max-width:100%">
+        ${(()=>{
+          const items = readings
+            .map(r=>({title:r.bookTitle,author:r.bookAuthor,user:r.userName,min:toMin(r.readingTime),raw:r.readingTime,marks:r.bookmarks.length}))
+            .filter(r=>r.min>0)
+            .sort((a,b)=>b.min-a.min);
+          const maxM = items[0]?.min||1;
+          if(!items.length) return '<div style="color:var(--sub);font-size:.82rem;text-align:center;padding:20px">暂无有时长记录的书籍</div>';
+          return items.map((r,i)=>`
+            <div class="lb-row" style="gap:12px;cursor:pointer" onclick="openBook('${esc(bookKey(r.title,r.author))}')">
+              <div class="lb-rank lb-rank-${i<3?i+1:'n'}">${i+1}</div>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <span style="font-weight:700;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px" title="${esc(r.title)}">${esc(r.title)}</span>
+                  <span style="font-size:.74rem;color:var(--sub)">✍ ${esc(r.author||'—')}</span>
+                  <div style="display:flex;align-items:center;gap:4px;margin-left:auto;flex-shrink:0">
+                    <div style="width:16px;height:16px;border-radius:50%;background:${avatarColor(r.user)};font-size:.6rem;font-weight:800;color:#fff;display:flex;align-items:center;justify-content:center">${esc(r.user[0])}</div>
+                    <span style="font-size:.78rem;font-weight:600;color:${r.user===currentUser?'var(--accent)':'var(--text)'}">${esc(r.user)}${r.user===currentUser?' 👈':''}</span>
+                    <span class="lb-val" style="margin-left:6px">${fmtMin(r.min)}</span>
+                  </div>
+                </div>
+                <div class="lb-bar-wrap" style="margin-top:5px"><div class="lb-bar" style="width:${Math.round(r.min/maxM*100)}%"></div></div>
+              </div>
+            </div>`).join('');
+        })()}
+      </div>
+    `;
+    setMain(html);
+  },
+
+  authors() {
+    const readings = getAllReadings();
+    const authorMap = new Map();
+    for(const r of readings){
+      if(!r.bookAuthor)continue;
+      if(!authorMap.has(r.bookAuthor)) authorMap.set(r.bookAuthor,{name:r.bookAuthor,books:new Set(),readers:new Set(),marks:0});
+      const a=authorMap.get(r.bookAuthor);
+      a.books.add(r.bookTitle); a.readers.add(r.userName); a.marks+=r.bookmarks.length;
+    }
+    const authors = [...authorMap.values()].sort((a,b)=>b.readers.size-a.readers.size);
+    const html = `
+      <div class="sec-header" style="margin-bottom:20px">
+        <div class="sec-title"><div class="sec-title-dot"></div>作者墙 · ${authors.length} 位作者</div>
+      </div>
+      ${authors.length===0?'<div class="empty"><div class="empty-icon">✍️</div><div style="font-weight:700;margin-bottom:6px">还没有作者信息</div><div>导入书签后自动识别</div></div>':`
+      <div class="authors-grid">
+        ${authors.map(a=>{
+          const c=avatarColor(a.name);
+          return `<div class="author-card" onclick="filterAuthor('${esc(a.name)}')">
+            <div class="author-avatar" style="background:${c}">${esc(a.name[0])}</div>
+            <div class="author-name">${esc(a.name)}</div>
+            <div class="author-meta">${a.readers.size} 人读过 · ${a.marks} 条书签</div>
+            <div class="author-books-mini">${[...a.books].slice(0,2).map(esc).join('、')}${a.books.size>2?` 等${a.books.size}本`:''}</div>
+          </div>`;
+        }).join('')}
+      </div>`}
+    `;
+    setMain(html);
+  }
+};
+
+// ─── BOOK CARD ──────────────────────────────────────────
+function renderBookCard(book, showDelete=false, readingId=''){
+  const [c1,c2]=colorOf(book.title);
+  const totalMin=book.readings.reduce((a,r)=>a+toMin(r.readingTime),0);
+  const totalMarks=book.readings.reduce((a,r)=>a+r.bookmarks.length,0);
+  const totalThoughts=book.readings.reduce((a,r)=>a+r.bookmarks.filter(bm=>bm.thought).length,0);
+  const readers=book.readings.map(r=>r.userName);
+  const bk=bookKey(book.title,book.author);
+  return `<div class="book-card" onclick="openBook('${esc(bk)}')">
+    <div class="book-cover" style="background:linear-gradient(140deg,${c1} 0%,${c2} 100%)">
+      <div class="book-ribbon"></div>
+      <div class="book-cover-text">
+        <div class="book-cover-title">${esc(book.title)}</div>
+        <div class="book-cover-author">✍ ${esc(book.author||'未知')}</div>
+      </div>
+    </div>
+    <div class="book-body">
+      ${book.notes?`<div class="book-desc">${esc(book.notes)}</div>`:''}
+      ${(book.groups||[]).length?`<div class="book-tags">${book.groups.map(g=>`<span class="tag">${esc(g)}</span>`).join('')}</div>`:''}
+      <div class="book-footer">
+        <div class="book-time">⏱ ${fmtMin(totalMin)}</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${readers.length>1?`<div class="book-readers">${readers.slice(0,4).map(u=>`<div class="reader-avatar" style="background:${avatarColor(u)}" title="${esc(u)}">${esc(u[0])}</div>`).join('')}</div>`:''}
+          <span style="font-size:.74rem;color:var(--sub)">📌${totalMarks}${totalThoughts?` 💭${totalThoughts}`:''}</span>
+          ${showDelete?`<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();doDelete('${readingId}')" style="color:#e07060;border-color:#e07060">删除</button>`:''}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ─── INTERACTIONS (reactions + comments) ───────────────
+const IX_KEY = 'bookmarkHouse_ix_v1';
+
+function ixGet(){ try{ return JSON.parse(localStorage.getItem(IX_KEY)||'{}'); }catch{ return {}; } }
+function ixSet(d){ _memIx=JSON.parse(JSON.stringify(d)); try{ localStorage.setItem(IX_KEY,JSON.stringify(d)); }catch{} }
+let _memIx = ixGet();
+
+function ixKey(rid,idx){ return `${rid}__${idx}`; }
+
+function getIx(rid,idx){
+  const k=ixKey(rid,idx);
+  const d=ixGet();
+  return d[k] || { reactions:{}, comments:[] };
+}
+
+async function toggleReaction(rid,idx,emoji){
+  const d=ixGet(); const k=ixKey(rid,idx);
+  if(!d[k]) d[k]={reactions:{},comments:[]};
+  if(d[k].reactions[currentUser]===emoji) delete d[k].reactions[currentUser];
+  else d[k].reactions[currentUser]=emoji;
+  ixSet(d);
+  if(db){ const {doc,setDoc}=window._fs; await setDoc(doc(db,'interactions',k.replace(/[^a-zA-Z0-9_]/g,'_')),d[k]); }
+  // re-render just this bookmark's action bar
+  const bar=document.getElementById('act_'+k.replace(/[^a-zA-Z0-9]/g,'_'));
+  if(bar) bar.outerHTML=renderActions(rid,idx);
+}
+
+async function submitComment(rid,idx){
+  const k=ixKey(rid,idx); const safeK=k.replace(/[^a-zA-Z0-9]/g,'_');
+  const inp=document.getElementById('cinp_'+safeK);
+  const text=(inp?.value||'').trim(); if(!text)return;
+  const d=ixGet(); if(!d[k])d[k]={reactions:{},comments:[]};
+  d[k].comments.push({user:currentUser,text,time:Date.now()});
+  ixSet(d); inp.value='';
+  if(db){ const {doc,setDoc}=window._fs; await setDoc(doc(db,'interactions',safeK),d[k]); }
+  const clist=document.getElementById('clist_'+safeK);
+  if(clist) clist.innerHTML=renderCommentList(d[k].comments);
+  // update toggle button count
+  const tog=document.getElementById('ctog_'+safeK);
+  if(tog) tog.textContent=`💬 ${d[k].comments.length}条`;
+}
+
+function toggleComments(safeK){
+  const el=document.getElementById('cmts_'+safeK);
+  if(el) el.classList.toggle('open');
+}
+
+function renderActions(rid,idx){
+  const EMOJIS=['👍','❤️','😮','🤔'];
+  const ix=getIx(rid,idx);
+  const k=ixKey(rid,idx); const safeK=k.replace(/[^a-zA-Z0-9]/g,'_');
+  const myReact=ix.reactions[currentUser]||'';
+  // count per emoji
+  const counts={};
+  Object.values(ix.reactions).forEach(e=>counts[e]=(counts[e]||0)+1);
+  const reactBtns=EMOJIS.map(e=>{
+    const cnt=counts[e]||0;
+    const reacted=myReact===e;
+    return `<button class="react-btn ${reacted?'reacted':''}" id="act_${safeK}_${e}" onclick="toggleReaction('${rid}',${idx},'${e}')">${e}${cnt?` ${cnt}`:''}</button>`;
+  }).join('');
+  const cmtCnt=ix.comments.length;
+  return `<div class="bm-actions" id="act_${safeK}">
+    ${reactBtns}
+    <button class="comment-toggle" id="ctog_${safeK}" onclick="toggleComments('${safeK}')" style="margin-left:4px">💬 ${cmtCnt?cmtCnt+'条':'评论'}</button>
+  </div>
+  <div class="bm-comments" id="cmts_${safeK}">
+    <div id="clist_${safeK}">${renderCommentList(ix.comments)}</div>
+    <div class="comment-input-row">
+      <div class="comment-av" style="background:${avatarColor(currentUser)}">${esc(currentUser[0])}</div>
+      <input class="comment-inp" id="cinp_${safeK}" placeholder="写评论，回车发送…" onkeydown="if(event.key==='Enter'){event.preventDefault();submitComment('${rid}',${idx})}">
+      <button class="comment-send" onclick="submitComment('${rid}',${idx})">↑</button>
+    </div>
+  </div>`;
+}
+
+function renderCommentList(comments){
+  if(!comments.length) return '<div style="font-size:.78rem;color:#ccc;padding:4px 0">暂无评论</div>';
+  return comments.map(c=>`
+    <div class="comment-item">
+      <div class="comment-av" style="background:${avatarColor(c.user)}">${esc(c.user[0])}</div>
+      <div class="comment-body">
+        <div><span class="comment-name">${esc(c.user)}</span><span class="comment-time">${new Date(c.time).toLocaleDateString('zh',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span></div>
+        <div class="comment-text">${esc(c.text)}</div>
+      </div>
+    </div>`).join('');
+}
+
+// ─── OPEN BOOK DETAIL ───────────────────────────────────
+window.openBook = function(bk){
+  currentBookKey = bk;
+  currentBookUser = null; // null = show all
+  const all = getAllReadings();
+  const readings = all.filter(r=>bookKey(r.bookTitle,r.bookAuthor)===bk);
+  if(!readings.length)return;
+  const ref = readings[0];
+  const [c1,c2]=colorOf(ref.bookTitle);
+  document.getElementById('bCovBar').style.background=`linear-gradient(90deg,${c1},${c2})`;
+  document.getElementById('bTitle').textContent=ref.bookTitle;
+  document.getElementById('bAuthor').textContent='✍ '+(ref.bookAuthor||'未知作者');
+  const myReading = readings.find(r=>r.userName===currentUser);
+  const desc=document.getElementById('bDesc');
+  desc.style.display='block';
+  if(myReading){
+    desc.contentEditable='true';
+    desc.dataset.rid=myReading.id;
+    desc.style.cursor='text';
+    desc.innerHTML=myReading.notes
+      ?esc(myReading.notes)
+      :'<span style="color:#bbb;font-style:italic;pointer-events:none">点击添加书籍简介…</span>';
+    desc.onblur=()=>window.saveNotes(desc);
+    desc.onfocus=()=>{ if(!myReading.notes) desc.innerHTML=''; };
+  } else {
+    desc.contentEditable='false';
+    desc.dataset.rid='';
+    desc.style.cursor='default';
+    if(ref.notes){ desc.textContent=ref.notes; }
+    else { desc.style.display='none'; }
+  }
+  document.getElementById('bTags').innerHTML=(ref.groups||[]).map(g=>`<span class="tag">${esc(g)}</span>`).join('');
+
+  // ── 阅读时长对比区 ──
+  const allMaxMin = Math.max(...all.map(r=>toMin(r.readingTime)), 1);
+  const localMax  = Math.max(...readings.map(r=>toMin(r.readingTime)), 1);
+  const timeHtml  = readings.map(r=>{
+    const m = toMin(r.readingTime);
+    const pct = Math.round(m / localMax * 100);
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+      <div style="width:20px;height:20px;border-radius:50%;background:${avatarColor(r.userName)};font-size:.62rem;font-weight:800;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0">${esc(r.userName[0])}</div>
+      <span style="font-size:.78rem;font-weight:600;width:52px;flex-shrink:0">${esc(r.userName)}</span>
+      <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+        <div style="height:6px;width:${pct}%;background:linear-gradient(90deg,${avatarColor(r.userName)},${avatarColor(r.userName)}cc);border-radius:3px;transition:width .4s"></div>
+      </div>
+      <span style="font-size:.78rem;color:var(--accent);font-weight:600;width:44px;text-align:right;flex-shrink:0">${fmtMin(m)}</span>
+    </div>`;
+  }).join('');
+  const timeSection = document.getElementById('bTimeSection');
+  if(timeSection) timeSection.innerHTML = timeHtml;
+
+  // progress bar vs all books
+  const myAvgMin = readings.reduce((a,r)=>a+toMin(r.readingTime),0) / readings.length;
+  document.getElementById('bProg').style.width = Math.round(myAvgMin/allMaxMin*100)+'%';
+
+  // user filter tabs — "全部" + each reader
+  document.getElementById('bUserTabs').innerHTML =
+    `<div class="user-tab active" data-ufilter="" onclick="switchBookUser('')">全部 · ${readings.length}人</div>` +
+    readings.map(r=>`
+      <div class="user-tab" data-ufilter="${esc(r.userName)}" onclick="switchBookUser('${esc(r.userName)}')" style="display:flex;align-items:center;gap:5px">
+        <div style="width:18px;height:18px;border-radius:50%;background:${avatarColor(r.userName)};font-size:.62rem;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0">${esc(r.userName[0])}</div>
+        ${esc(r.userName)}
+        <span style="font-size:.68rem;opacity:.6">⏱${fmtMin(toMin(r.readingTime))}</span>
+      </div>`).join('');
+
+  renderBookBody(readings);
+  document.getElementById('bookOverlay').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+
+window.switchBookUser = function(u){
+  currentBookUser = u || null;
+  document.querySelectorAll('#bUserTabs .user-tab').forEach(el=>{
+    el.classList.toggle('active', el.dataset.ufilter === (u||''));
+  });
+  const all=getAllReadings();
+  const readings=all.filter(r=>bookKey(r.bookTitle,r.bookAuthor)===currentBookKey);
+  renderBookBody(readings);
+}
+
+function renderBookBody(readings){
+  // filter by selected user (null = all)
+  const filtered = currentBookUser ? readings.filter(r=>r.userName===currentBookUser) : readings;
+  if(!filtered.length){document.getElementById('bBody').innerHTML='<div class="empty">暂无数据</div>';return;}
+
+  // collect ALL bookmarks across all visible readers, grouped by chapter
+  const chMap=new Map();
+  for(const r of filtered){
+    r.bookmarks.forEach((bm,i)=>{
+      if(!chMap.has(bm.chapter)) chMap.set(bm.chapter,[]);
+      chMap.get(bm.chapter).push({...bm, idx:i, readingId:r.id, owner:r.userName, ownerTime:r.readingTime});
+    });
+  }
+
+  document.getElementById('bBody').innerHTML=[...chMap.entries()].map(([ch,bms])=>`
+    <div style="margin-bottom:24px">
+      <div class="ch-head">${esc(ch)} <span style="font-size:.7rem;opacity:.6">${bms.length}条</span></div>
+      ${bms.map(bm=>{
+        const isMe=bm.owner===currentUser;
+        const safeK=ixKey(bm.readingId,bm.idx).replace(/[^a-zA-Z0-9]/g,'_');
+        return `<div class="bm ${isMe?'me':'other'}">
+          <div class="bm-owner">
+            <div class="bm-owner-av" style="background:${avatarColor(bm.owner)}">${esc(bm.owner[0])}</div>
+            <span class="bm-owner-name">${esc(bm.owner)}</span>
+            ${isMe?'<span style="font-size:.68rem;background:var(--accent-l);color:var(--accent);padding:1px 7px;border-radius:8px;margin-left:2px">我</span>':''}
+            <span class="bm-owner-time">⏱ ${fmtMin(toMin(bm.ownerTime))}</span>
+          </div>
+          <div class="bm-orig">${esc(bm.original).replace(/\n/g,'<br>')}</div>
+          <div class="bm-thought-wrap">
+            <span class="bm-thought-icon">💭</span>
+            ${isMe
+              ? `<span class="bm-thought-text" contenteditable="true" data-rid="${bm.readingId}" data-idx="${bm.idx}" onblur="saveThought(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.blur()}">${esc(bm.thought)||''}</span>${!bm.thought?'<span class="bm-thought-hint" style="pointer-events:none">点击添加想法…</span>':''}`
+              : `<span class="bm-thought-text" style="color:var(--accent-d)">${bm.thought?esc(bm.thought):'<span style="color:#ccc;font-size:.78rem">TA 没写想法</span>'}</span>`
+            }
+          </div>
+          ${renderActions(bm.readingId,bm.idx)}
+        </div>`;
+      }).join('')}
+    </div>`).join('')||'<div class="empty" style="padding:40px 0">暂无书签内容</div>';
+}
+
+window.saveThought = async function(el){
+  const rid=el.dataset.rid, idx=+el.dataset.idx, val=el.innerText.trim();
+  await updateThought(rid,idx,val);
+  el.nextElementSibling?.remove(); // remove hint
+  showToast('已保存 ✓');
+}
+
+window.saveNotes = async function(el){
+  const rid=el.dataset.rid; if(!rid) return;
+  const val=el.innerText.trim();
+  const store=lsGet();
+  if(!store.readings||!store.readings[rid]) return;
+  store.readings[rid].notes=val;
+  store.readings[rid].updatedAt=Date.now();
+  lsSet(store);
+  if(db){ const {doc,setDoc}=window._fs; await setDoc(doc(db,'readings',rid),store.readings[rid]); }
+  // restore placeholder if empty
+  if(!val) el.innerHTML='<span style="color:#bbb;font-style:italic;pointer-events:none">点击添加书籍简介…</span>';
+  showToast('简介已保存 ✓');
+}
+
+// ─── FILTER & SEARCH ────────────────────────────────────
+window.setFilter=function(t){filterTag=t;renderCurrent();}
+window.onSearch=function(v){searchQ=v;renderCurrent();}
+window.filterAuthor=function(author){
+  switchTab('plaza');
+  setTimeout(()=>{searchQ=author;const el=document.getElementById('searchInp');if(el)el.value=author;renderCurrent();},50);
+}
+
+// ─── FILE IMPORT ────────────────────────────────────────
+window.handleFileInput=async function(e){
+  const f=e.target.files[0];if(!f)return;
+  const text=await f.text();
+  await importMd(text);
+  e.target.value='';
+}
+
+async function importMd(text){
+  const books=parseMd(text);
+  if(!books.length){showToast('未解析到有效书签');return;}
+  const existing=getAllReadings();
+  let added=0,updated=0;
+  for(const b of books){
+    const id=makeId(currentUser,b.title,b.author);
+    const old=existing.find(r=>r.id===id);
+    let finalBookmarks;
+    if(old){
+      // 增量合并：用"章节+原文"作为唯一键
+      const oldMap=new Map(old.bookmarks.map((bm,i)=>[bm.chapter+'||'+bm.original.slice(0,30), bm]));
+      finalBookmarks=b.bookmarks.map(bm=>{
+        const key=bm.chapter+'||'+bm.original.slice(0,30);
+        const prev=oldMap.get(key);
+        // 保留已编辑的想法；若新导入有想法且旧的没有，取新的
+        return {...bm, thought: (prev&&prev.thought) ? prev.thought : (bm.thought||'') };
+      });
+      updated++;
+    } else {
+      finalBookmarks=b.bookmarks;
+      added++;
+    }
+    await saveReading({
+      id, userName:currentUser, bookTitle:b.title, bookAuthor:b.author,
+      readingTime:b.readingTime, notes:b.notes, groups:b.groups,
+      bookmarks:finalBookmarks,
+      importedAt: old?old.importedAt:Date.now(), updatedAt:Date.now()
+    });
+  }
+  const msg=[];
+  if(added) msg.push(`新增 ${added} 本`);
+  if(updated) msg.push(`更新 ${updated} 本`);
+  showToast(`导入完成：${msg.join('，')} 📚`);
+  renderCurrent();
+}
+
+window.doDelete=async function(id){
+  if(!confirm('确定删除这条书架记录？'))return;
+  await deleteReading(id);
+  showToast('已删除');
+  renderCurrent();
+}
+
+// ─── SETUP FIREBASE ─────────────────────────────────────
+window.openSetup=()=>document.getElementById('setupOverlay').classList.add('open');
+window.saveFirebaseConfig=async function(){
+  const raw=document.getElementById('configInput').value.trim();
+  let config;
+  try{config=JSON.parse(raw);}catch{showToast('配置格式错误，请粘贴 JSON 格式');return;}
+  if(!config.apiKey){showToast('未找到 apiKey，请检查配置');return;}
+  const ok=await initFirebase(config);
+  if(!ok){showToast('连接失败，请检查配置');return;}
+  const store=lsGet();store.firebaseConfig=config;lsSet(store);
+  startSync();
+  closeOverlay('setupOverlay');
+  showToast('云同步已开启 🟢');
+}
+
+// ─── OVERLAY ────────────────────────────────────────────
+window.closeOverlay=function(id,e){
+  if(e&&e.target!==document.getElementById(id))return;
+  document.getElementById(id).classList.remove('open');
+  if(id==='bookOverlay')document.body.style.overflow='';
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.overlay.open').forEach(o=>o.classList.remove('open'));document.body.style.overflow='';}});
+
+// ─── DRAG DROP ──────────────────────────────────────────
+document.addEventListener('dragover',e=>{e.preventDefault();document.getElementById('dragMask').classList.add('on');});
+document.addEventListener('dragleave',e=>{if(!e.relatedTarget)document.getElementById('dragMask').classList.remove('on');});
+document.addEventListener('drop',async e=>{
+
+// ─── EMBED CONFIG HELPER ────────────────────────────────
+window.embedFirebaseConfig = function(){
+  const raw = document.getElementById('configInput').value.trim();
+  let cfg; try{ cfg=JSON.parse(raw); }catch{ showToast('配置格式有误，请检查 JSON'); return; }
+  if(!cfg.apiKey){ showToast('未找到 apiKey，请重新复制配置'); return; }
+  // Read current page HTML and replace the PRESET_FIREBASE_CONFIG line
+  const src = document.documentElement.outerHTML;
+  const replaced = src.replace(
+    /const PRESET_FIREBASE_CONFIG = null;/,
+    'const PRESET_FIREBASE_CONFIG = ' + JSON.stringify(cfg, null, 2) + ';'
+  );
+  // Download as file
+  const blob = new Blob([replaced], {type:'text/html'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'bookmark-house.html';
+  a.click();
+  showToast('已下载！把这个 HTML 上传到 GitHub 就能用 🎉');
+}
+  e.preventDefault();document.getElementById('dragMask').classList.remove('on');
+  const f=e.dataTransfer.files[0];
+  if(f&&f.name.endsWith('.md')){const text=await f.text();await importMd(text);}
+});
+
+// ─── HELPERS ────────────────────────────────────────────
+function setMain(html){document.getElementById('mainContent').innerHTML=html;}
+
+// ─── BOOT ───────────────────────────────────────────────
+(()=>{
+  const store=lsGet();
+  if(store.currentUser){
+    currentUser=store.currentUser;
+    document.getElementById('nameInput').value=currentUser;
+  }
+  // Enter on login
+  document.getElementById('nameInput').addEventListener('keydown',e=>{if(e.key==='Enter')window.doLogin();});
+})();
+</script>
+</body>
+</html>
