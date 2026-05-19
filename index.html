@@ -410,7 +410,7 @@ async function saveGistConfig() {
       method: 'POST',
       headers: { Authorization: `token ${_gistToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ description: 'bookmark-house data', public: false,
-        files: { 'bookmarkhouse.json': { content: JSON.stringify(lsGet()) } } })
+        files: { 'bookmarkhouse.json': { content: JSON.stringify({ readings: lsGet().readings || {} }) } } })
     });
     if (!resp.ok) { setGistBadge('❌ 创建失败，请检查 Token'); return; }
     const g = await resp.json();
