@@ -312,6 +312,28 @@ body{font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;b
           <input type="file" id="importJsonInput" accept=".json" style="display:none" onchange="importJson(event)">
         </div>
       </div>
+
+      <!-- ── WebDAV 同步 ── -->
+      <div style="margin-top:28px;padding-top:24px;border-top:1px solid rgba(255,255,255,.08)">
+        <div style="font-size:1rem;font-weight:700;margin-bottom:6px">☁️ WebDAV 同步（国内可用）</div>
+        <p style="font-size:.82rem;color:var(--sub);margin-bottom:14px">
+          支持 TeraCloud、坚果云等任意 WebDAV 服务，数据存为一个 JSON 文件，多端共享。
+        </p>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <input id="webdavUrl" class="config-textarea" style="height:42px;padding:10px 14px;font-size:.82rem"
+            placeholder="WebDAV 地址，如 https://wani.teracloud.jp/dav/">
+          <input id="webdavUser" class="config-textarea" style="height:42px;padding:10px 14px;font-size:.82rem"
+            placeholder="用户名 / 邮箱">
+          <input id="webdavPass" class="config-textarea" type="password" style="height:42px;padding:10px 14px;font-size:.82rem"
+            placeholder="密码 / App 密码">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
+          <button class="btn btn-accent" onclick="saveWebdavConfig()">保存并测试</button>
+          <button class="btn btn-ghost" onclick="pushToWebdav()">⬆ 推送到云端</button>
+          <button class="btn btn-ghost" onclick="pullFromWebdav()">⬇ 从云端拉取</button>
+          <span id="webdavBadge" style="font-size:.78rem;color:var(--sub)"></span>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -331,6 +353,14 @@ const PRESET_FIREBASE_CONFIG = {
   storageBucket: "bookmark-house-e2b44.firebasestorage.app",
   messagingSenderId: "525029649697",
   appId: "1:525029649697:web:23e08334840f0462fe2260"
+};
+// ────────────────────────────────────────────────────────
+
+// ─── ★ WebDAV 配置（由构建脚本注入，留空则手动填写）──────
+const PRESET_WEBDAV = {
+  url:  '%%WEBDAV_URL%%',
+  user: '%%WEBDAV_USER%%',
+  pass: '%%WEBDAV_PASS%%'
 };
 // ────────────────────────────────────────────────────────
 
@@ -364,6 +394,84 @@ function lsGet() {
 function lsSet(data) {
   _memStore = JSON.parse(JSON.stringify(data));
   try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch {}
+}
+
+// ─── WEBDAV 同步 ───────────────────────────────────────
+const WEBDAV_FILE = 'bookmarkhouse.json';
+
+function webdavHeaders() {
+  const store = lsGet();
+  const user = store.webdavUser || '', pass = store.webdavPass || '';
+  return {
+    'Authorization': 'Basic ' + btoa(unescape(encodeURIComponent(user + ':' + pass))),
+    'Content-Type': 'application/json'
+  };
+}
+function webdavFileUrl() {
+  const store = lsGet();
+  let base = (store.webdavUrl || '').trim().replace(/\/?$/, '/');
+  return base + WEBDAV_FILE;
+}
+function setWebdavBadge(msg) {
+  const el = document.getElementById('webdavBadge');
+  if (el) el.textContent = msg;
+}
+
+async function saveWebdavConfig() {
+  const url  = document.getElementById('webdavUrl').value.trim();
+  const user = document.getElementById('webdavUser').value.trim();
+  const pass = document.getElementById('webdavPass').value;
+  if (!url || !user || !pass) { showToast('请填写完整 WebDAV 地址、用户名和密码'); return; }
+  const store = lsGet();
+  store.webdavUrl = url; store.webdavUser = user; store.webdavPass = pass;
+  lsSet(store);
+  setWebdavBadge('⏳ 测试中…');
+  await pushToWebdav();
+}
+
+async function pushToWebdav() {
+  const store = lsGet();
+  if (!store.webdavUrl) { showToast('请先配置 WebDAV'); return; }
+  setWebdavBadge('⏳ 上传中…');
+  try {
+    const payload = JSON.stringify({ readings: store.readings || {} });
+    const resp = await fetch(webdavFileUrl(), {
+      method: 'PUT', headers: webdavHeaders(), body: payload
+    });
+    if (!resp.ok && resp.status !== 201 && resp.status !== 204)
+      throw new Error('HTTP ' + resp.status);
+    setWebdavBadge('🟢 已同步到云端');
+    showToast('已推送到 WebDAV ✅');
+  } catch(e) {
+    setWebdavBadge('❌ 上传失败');
+    showToast('WebDAV 上传出错：' + e.message, 4000);
+  }
+}
+
+async function pullFromWebdav() {
+  const store = lsGet();
+  if (!store.webdavUrl) { showToast('请先配置 WebDAV'); return; }
+  setWebdavBadge('⏳ 拉取中…');
+  try {
+    const resp = await fetch(webdavFileUrl(), { headers: webdavHeaders() });
+    if (resp.status === 404) { setWebdavBadge('⚠️ 云端暂无数据'); showToast('云端还没有数据，先推送一次吧'); return; }
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const remote = await resp.json();
+    if (!remote.readings) throw new Error('数据格式不对');
+    const merged = { ...store, readings: { ...(store.readings||{}), ...remote.readings } };
+    lsSet(merged);
+    if (db) {
+      const { doc, setDoc } = window._fs;
+      for (const [id, r] of Object.entries(remote.readings))
+        await setDoc(doc(db, 'readings', id), r);
+    }
+    renderCurrent();
+    setWebdavBadge('🟢 已同步到云端');
+    showToast(`从 WebDAV 拉取成功，共 ${Object.keys(remote.readings).length} 条 ✅`);
+  } catch(e) {
+    setWebdavBadge('❌ 拉取失败');
+    showToast('WebDAV 拉取出错：' + e.message, 4000);
+  }
 }
 
 // ─── JSON 备份 / 恢复 ──────────────────────────────────
@@ -589,11 +697,23 @@ function bootApp(){
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('app').style.display='flex';
   document.getElementById('userChip').textContent = '👤 '+currentUser;
-  // 优先用预填配置，其次用 localStorage 里保存的
   const store = lsGet();
   const cfg = PRESET_FIREBASE_CONFIG || store.firebaseConfig;
-  if(cfg){
-    initFirebase(cfg).then(ok=>{ if(ok) startSync(); });
+  if(cfg){ initFirebase(cfg).then(ok=>{ if(ok) startSync(); }); }
+  // 注入构建时 WebDAV 配置（占位符未替换则跳过）
+  if(PRESET_WEBDAV.url && !PRESET_WEBDAV.url.startsWith('%%')){
+    store.webdavUrl  = PRESET_WEBDAV.url;
+    store.webdavUser = PRESET_WEBDAV.user;
+    store.webdavPass = PRESET_WEBDAV.pass;
+    lsSet(store);
+  }
+  // 恢复 WebDAV 配置显示
+  if(store.webdavUrl){
+    const u=document.getElementById('webdavUrl'), usr=document.getElementById('webdavUser'), p=document.getElementById('webdavPass');
+    if(u) u.value=store.webdavUrl;
+    if(usr) usr.value=store.webdavUser||'';
+    if(p) p.value=store.webdavPass||'';
+    setWebdavBadge('🟢 已配置 WebDAV');
   }
   switchTab('plaza');
 }
