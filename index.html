@@ -298,6 +298,26 @@ body{font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;b
           <button class="btn btn-ghost" onclick="embedFirebaseConfig()" title="把配置写入当前 HTML，上传 GitHub 后所有人自动连接">📋 复制已嵌入配置的 HTML</button>
         </div>
       </div></div>
+
+      <!-- ── GitHub Gist 备用存储 ── -->
+      <div style="margin-top:28px;padding-top:24px;border-top:1px solid rgba(255,255,255,.08)">
+        <div style="font-size:1rem;font-weight:700;margin-bottom:6px">🐙 GitHub Gist 备用同步（国内访问更稳定）</div>
+        <p style="font-size:.82rem;color:var(--sub);margin-bottom:14px">
+          配置后数据会<b>同时</b>写入 Firebase 和 GitHub Gist，两条通道互为备份。<br>
+          获取 Token：<a href="https://github.com/settings/tokens/new?scopes=gist&description=bookmark-house" target="_blank" style="color:var(--accent)">github.com → Settings → Developer settings → Personal access tokens → 勾选 gist → Generate</a>
+        </p>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <input id="gistTokenInput" class="config-textarea" style="height:42px;padding:10px 14px;font-size:.82rem"
+            placeholder="GitHub Personal Access Token（ghp_xxxx）">
+          <input id="gistIdInput" class="config-textarea" style="height:42px;padding:10px 14px;font-size:.82rem"
+            placeholder="Gist ID（留空则自动创建新 Gist）">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
+          <button class="btn btn-accent" onclick="saveGistConfig()">保存 Gist 配置</button>
+          <button class="btn btn-ghost" onclick="pullFromGist()">⬇ 从 Gist 拉取数据</button>
+          <span id="gistBadge" style="font-size:.78rem;color:var(--sub)"></span>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -352,6 +372,95 @@ function lsSet(data) {
   try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch {}
 }
 
+// ─── GITHUB GIST SYNC ──────────────────────────────────
+let _gistToken = null;
+let _gistId = null;
+
+function initGist() {
+  const store = lsGet();
+  if (store.gistToken) _gistToken = store.gistToken;
+  if (store.gistId)    _gistId    = store.gistId;
+  if (_gistToken) {
+    const inp = document.getElementById('gistTokenInput');
+    const iid = document.getElementById('gistIdInput');
+    if (inp) inp.value = _gistToken;
+    if (iid) iid.value = _gistId || '';
+    setGistBadge(_gistId ? '🟢 已配置 Gist' : '⚙️ Token 已保存，未绑定 Gist');
+  }
+}
+
+function setGistBadge(msg) {
+  const el = document.getElementById('gistBadge');
+  if (el) el.textContent = msg;
+}
+
+async function saveGistConfig() {
+  const token = document.getElementById('gistTokenInput').value.trim();
+  const id    = document.getElementById('gistIdInput').value.trim();
+  if (!token) { showToast('请输入 GitHub Token'); return; }
+  _gistToken = token;
+  const store = lsGet();
+  store.gistToken = token;
+  if (id) { _gistId = id; store.gistId = id; }
+  lsSet(store);
+  if (!_gistId) {
+    // auto-create a new private gist
+    setGistBadge('⏳ 正在创建 Gist…');
+    const resp = await fetch('https://api.github.com/gists', {
+      method: 'POST',
+      headers: { Authorization: `token ${_gistToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: 'bookmark-house data', public: false,
+        files: { 'bookmarkhouse.json': { content: JSON.stringify(lsGet()) } } })
+    });
+    if (!resp.ok) { setGistBadge('❌ 创建失败，请检查 Token'); return; }
+    const g = await resp.json();
+    _gistId = g.id;
+    const s2 = lsGet(); s2.gistId = _gistId; lsSet(s2);
+    document.getElementById('gistIdInput').value = _gistId;
+    setGistBadge('🟢 Gist 已创建：' + _gistId.slice(0,8) + '…');
+    showToast('Gist 创建成功，数据已上传 🎉');
+  } else {
+    await pushToGist();
+    setGistBadge('🟢 已配置 Gist');
+    showToast('Gist 配置已保存');
+  }
+}
+
+async function pushToGist() {
+  if (!_gistToken || !_gistId) return;
+  try {
+    await fetch(`https://api.github.com/gists/${_gistId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `token ${_gistToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: { 'bookmarkhouse.json': { content: JSON.stringify(lsGet()) } } })
+    });
+  } catch(e) { console.warn('Gist push failed:', e); }
+}
+
+async function pullFromGist() {
+  if (!_gistToken || !_gistId) { showToast('请先配置 Gist Token 和 ID'); return; }
+  setGistBadge('⏳ 拉取中…');
+  try {
+    const resp = await fetch(`https://api.github.com/gists/${_gistId}`,
+      { headers: { Authorization: `token ${_gistToken}` } });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const g = await resp.json();
+    const file = g.files['bookmarkhouse.json'];
+    if (!file) throw new Error('Gist 中未找到数据文件');
+    const remote = JSON.parse(file.content);
+    // merge: remote readings win, preserve local config fields
+    const local = lsGet();
+    const merged = { ...local, readings: { ...(local.readings||{}), ...(remote.readings||{}) } };
+    lsSet(merged);
+    renderCurrent();
+    setGistBadge('🟢 已配置 Gist');
+    showToast('已从 Gist 拉取最新数据 ✅');
+  } catch(e) {
+    setGistBadge('❌ 拉取失败');
+    showToast('Gist 拉取出错：' + e.message, 4000);
+  }
+}
+
 async function saveReading(reading) {
   // localStorage
   const store = lsGet();
@@ -364,6 +473,8 @@ async function saveReading(reading) {
     const { doc, setDoc } = window._fs;
     await setDoc(doc(db, 'readings', id), reading);
   }
+  // Gist (fire-and-forget)
+  pushToGist();
 }
 
 async function deleteReading(id) {
@@ -374,6 +485,8 @@ async function deleteReading(id) {
     const { doc, deleteDoc } = window._fs;
     await deleteDoc(doc(db, 'readings', id));
   }
+  // Gist (fire-and-forget)
+  pushToGist();
 }
 
 function getAllReadings() {
@@ -543,6 +656,8 @@ function bootApp(){
   if(cfg){
     initFirebase(cfg).then(ok=>{ if(ok) startSync(); });
   }
+  // 初始化 Gist 配置
+  initGist();
   switchTab('plaza');
 }
 
