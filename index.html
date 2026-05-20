@@ -198,7 +198,30 @@ body{font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;b
 /* progress */
 .prog-bar{height:3px;background:var(--border);border-radius:2px;margin-top:10px;overflow:hidden}
 .prog-fill{height:3px;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .5s}
-/* ——— tablet (≤900px) ——— */
+/* ——— random walk card ——— */
+.rw-card{background:var(--card);border-radius:var(--r);padding:20px 24px;box-shadow:var(--sh);border:1px solid var(--border);margin-bottom:28px}
+.rw-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.rw-title{font-size:.95rem;font-weight:700;display:flex;align-items:center;gap:8px}
+.rw-book-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.rw-book-icon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:1rem;font-weight:800;color:#fff;flex-shrink:0}
+.rw-chapter{font-size:.74rem;color:var(--accent);font-weight:600;margin-bottom:10px;letter-spacing:.4px}
+.rw-quote{font-size:.91rem;line-height:1.85;border-left:3px solid var(--accent);padding:10px 14px;background:var(--accent-l);border-radius:0 8px 8px 0;margin-bottom:12px;color:var(--text)}
+.rw-thought{background:rgba(200,118,58,.08);border-radius:8px;padding:8px 12px;font-size:.83rem;color:var(--accent-d);margin-bottom:10px;display:flex;gap:6px;align-items:flex-start}
+.rw-refresh{background:var(--bg);border:1.5px solid var(--border);border-radius:20px;padding:5px 14px;font-size:.78rem;cursor:pointer;transition:all .2s;white-space:nowrap}
+.rw-refresh:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-l)}
+/* ——— mobile bookmark improvements ——— */
+@media(max-width:600px){
+  .bm{padding:14px 12px}
+  .bm-orig{font-size:.9rem;line-height:1.9}
+  .react-btn{padding:5px 12px;font-size:.82rem;min-height:34px}
+  .bm-actions{gap:8px;margin-top:12px}
+  .ch-head{font-size:.78rem;padding:8px 0;position:sticky;top:0;background:var(--bg);z-index:10;margin-bottom:8px}
+  .comment-inp{font-size:.88rem;padding:8px 14px}
+  .comment-send{width:34px;height:34px}
+  .modal-body{padding-bottom:40px}
+  .rw-card{padding:16px}
+  .rw-quote{font-size:.88rem}
+}
 @media(max-width:900px){
   .main{padding:20px 16px}
   .stats-row{grid-template-columns:repeat(2,1fr)}
@@ -259,20 +282,32 @@ body{font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;b
   /* authors */
   .authors-grid{grid-template-columns:repeat(2,1fr);gap:12px}
 
-  /* modals - bottom sheet style */
+  /* modals - bottom sheet, compact header */
   .overlay{align-items:flex-end;padding:0}
   .modal{
     max-width:100vw;
     width:100%;
     margin:0;
     border-radius:20px 20px 0 0;
-    max-height:88vh;
+    max-height:92vh;
     position:fixed;
     bottom:0;left:0;right:0
   }
-  .modal-head,.modal-body{padding:16px}
-  .modal-top{flex-direction:column}
-  .modal-covbar{width:100%;height:120px;border-radius:12px 12px 0 0}
+  /* 色条压成细线 */
+  .modal-covbar{height:5px !important;border-radius:0}
+  /* 压缩标题区 */
+  .modal-head{padding:10px 14px 8px}
+  .modal-title{font-size:1.1rem;margin-bottom:2px}
+  .modal-author-line{font-size:.82rem;margin-bottom:6px}
+  /* 默认隐藏简介/时长/进度条，点「详情」展开 */
+  #bDesc,#bTimeSection,.prog-bar{display:none !important}
+  .modal-meta-row{margin-top:2px}
+  .book-detail-toggle{display:inline-block}
+  /* 用户 tabs 单行横滚 */
+  .user-tabs{padding:6px 10px;gap:6px;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .user-tabs::-webkit-scrollbar{display:none}
+  .user-tab{white-space:nowrap;flex-shrink:0;padding:5px 12px;font-size:.78rem}
+  .modal-body{padding:12px 12px 40px}
 
   /* leaderboard */
   .lb-card{padding:16px 14px}
@@ -310,7 +345,7 @@ body{font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;b
     <div class="topbar-right">
       <span class="user-chip" id="userChip"></span>
       <span class="sync-badge" id="syncBadge" onclick="openSetup()" title="点击配置云同步">⚡ 本地</span>
-      <button class="btn btn-ghost" id="syncBtn" style="font-size:.75rem;padding:5px 10px;display:none" onclick="manualSync()" title="立即从云端拉取最新数据">🔄 同步</button>
+      <button class="btn btn-ghost" id="syncBtn" style="font-size:.75rem;padding:5px 10px" onclick="manualSync()" title="立即同步云端数据">🔄 同步</button>
       <button class="btn btn-ghost" style="font-size:.75rem;padding:5px 10px" onclick="exportJson()" title="导出全部数据为 JSON 备份">💾 备份</button>
       <button class="btn btn-ghost" style="font-size:.75rem;padding:5px 10px" onclick="logout()">退出</button>
     </div>
@@ -330,6 +365,7 @@ body{font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;b
         <div class="modal-desc" id="bDesc" style="display:none"></div>
         <div class="modal-meta-row">
           <div id="bTags" class="book-tags"></div>
+          <button class="book-detail-toggle" id="bDetailToggle" onclick="toggleBookDetail()" style="display:none;font-size:.72rem;color:var(--sub);background:none;border:none;cursor:pointer;padding:2px 0;margin-left:auto">详情 ▾</button>
         </div>
         <div id="bTimeSection" style="margin-top:12px"></div>
         <div class="prog-bar" style="margin-top:8px" title="相对于所有书籍平均时长的比较"><div class="prog-fill" id="bProg" style="width:0%"></div></div>
@@ -594,17 +630,28 @@ function setBadge(text, on) {
   if (!el) return;
   el.textContent = text;
   el.classList.toggle('on', on);
-  const btn = document.getElementById('syncBtn');
-  if (btn) btn.style.display = on ? 'inline-block' : 'none';
 }
 
 async function manualSync() {
-  if (!db) { showToast('尚未连接云同步，请先配置 Firebase'); return; }
   const btn = document.getElementById('syncBtn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ 同步中…'; }
   try {
+    // 优先 Cloudflare KV
+    const r = await fetch('/api/data');
+    if (r.ok) {
+      await pullFromKV();
+      if (btn) { btn.disabled = false; btn.textContent = '🔄 同步'; }
+      return;
+    }
+  } catch {}
+  // 降级 Firebase
+  if (!db) {
+    showToast('未连接任何云同步，请先在设置中配置', 3000);
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 同步'; }
+    return;
+  }
+  try {
     const { collection, getDocs } = window._fs;
-    // getDocs may not be imported yet; fall back to re-running startSync
     if (getDocs) {
       const snap = await getDocs(collection(db, 'readings'));
       const store = lsGet();
@@ -612,16 +659,14 @@ async function manualSync() {
       snap.forEach(d => { store.readings[d.id] = d.data(); });
       lsSet(store);
       renderCurrent();
-      setBadge('🟢 云同步', true);
+      setBadge('🟢 Firebase', true);
       showToast('同步完成 🎉');
     } else {
-      // re-subscribe to force a fresh snapshot
       startSync();
       showToast('正在重新连接同步…');
     }
   } catch(e) {
     showToast('同步出错：' + e.message, 4000);
-    setBadge('❌ 同步失败', false);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '🔄 同步'; }
   }
@@ -629,6 +674,7 @@ async function manualSync() {
 
 // ─── PARSER ────────────────────────────────────────────
 function parseMd(text) {
+  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n'); // normalize Windows/Mac line endings
   const books = [];
   const parts = text.split(/\n(?=## )/);
   for (const part of parts) {
@@ -741,6 +787,7 @@ const render = {
 
     const html = `
       <div class="stats-row" id="plazaStats"></div>
+      <div class="rw-card" id="randomWalkCard"><div style="text-align:center;color:var(--sub);padding:12px">加载中…</div></div>
       <div class="filter-bar">
         <span style="font-size:.8rem;color:var(--sub)">筛选：</span>
         <span class="filter-pill ${!filterTag?'active':''}" onclick="setFilter(null)">全部</span>
@@ -764,6 +811,9 @@ const render = {
       {icon:'📌',num:readings.reduce((a,r)=>a+r.bookmarks.length,0),lbl:'条书签'},
       {icon:'💭',num:readings.reduce((a,r)=>a+r.bookmarks.filter(bm=>bm.thought).length,0),lbl:'条想法'},
     ].map(s=>`<div class="stat-card"><div class="stat-card-icon">${s.icon}</div><div class="stat-card-num">${s.num}</div><div class="stat-card-lbl">${s.lbl}</div></div>`).join('');
+    // 随机漫步：每次切到广场重新随机一条
+    const rwEl = document.getElementById('randomWalkCard');
+    if (rwEl) rwEl.innerHTML = buildRandomWalkHtml(pickRandomBm());
   },
 
   shelf() {
@@ -962,10 +1012,14 @@ async function toggleReaction(rid,idx,emoji){
   if(d[k].reactions[currentUser]===emoji) delete d[k].reactions[currentUser];
   else d[k].reactions[currentUser]=emoji;
   ixSet(d);
-  if(db){ const {doc,setDoc}=window._fs; await setDoc(doc(db,'interactions',k.replace(/[^a-zA-Z0-9_]/g,'_')),d[k]); }
-  // re-render just this bookmark's action bar
-  const bar=document.getElementById('act_'+k.replace(/[^a-zA-Z0-9]/g,'_'));
+  // 立即更新 DOM（乐观更新，无需等 Firebase）
+  const safeK=k.replace(/[^a-zA-Z0-9]/g,'_');
+  const bar=document.getElementById('act_'+safeK);
   if(bar) bar.outerHTML=renderActions(rid,idx);
+  const rwBar=document.getElementById('rw_act_'+safeK);
+  if(rwBar) rwBar.outerHTML=renderRWActions(rid,idx);
+  // Firebase 异步写，不阻塞
+  if(db){ const {doc,setDoc}=window._fs; setDoc(doc(db,'interactions',k.replace(/[^a-zA-Z0-9_]/g,'_')),d[k]).catch(console.error); }
 }
 
 async function submitComment(rid,idx){
@@ -975,12 +1029,13 @@ async function submitComment(rid,idx){
   const d=ixGet(); if(!d[k])d[k]={reactions:{},comments:[]};
   d[k].comments.push({user:currentUser,text,time:Date.now()});
   ixSet(d); inp.value='';
-  if(db){ const {doc,setDoc}=window._fs; await setDoc(doc(db,'interactions',safeK),d[k]); }
+  // 立即更新 DOM
   const clist=document.getElementById('clist_'+safeK);
   if(clist) clist.innerHTML=renderCommentList(d[k].comments);
-  // update toggle button count
   const tog=document.getElementById('ctog_'+safeK);
   if(tog) tog.textContent=`💬 ${d[k].comments.length}条`;
+  // Firebase 异步写，不阻塞
+  if(db){ const {doc,setDoc}=window._fs; setDoc(doc(db,'interactions',safeK),d[k]).catch(console.error); }
 }
 
 function toggleComments(safeK){
@@ -1016,8 +1071,97 @@ function renderActions(rid,idx){
   </div>`;
 }
 
+// ─── RANDOM WALK ────────────────────────────────────────
+let _rwRid = null, _rwIdx = null;
+
+function pickRandomBm() {
+  const readings = getAllReadings();
+  const pool = [];
+  for (const r of readings) {
+    r.bookmarks.forEach((bm, i) => {
+      if (bm.original) pool.push({ rid: r.id, idx: i, bm, bookTitle: r.bookTitle, bookAuthor: r.bookAuthor, userName: r.userName });
+    });
+  }
+  if (!pool.length) return null;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function renderRWActions(rid, idx) {
+  const EMOJIS = ['👍','❤️','😮','🤔'];
+  const ix = getIx(rid, idx);
+  const k = ixKey(rid, idx); const safeK = k.replace(/[^a-zA-Z0-9]/g,'_');
+  const myReact = ix.reactions[currentUser] || '';
+  const counts = {};
+  Object.values(ix.reactions).forEach(e => counts[e] = (counts[e]||0)+1);
+  const reactBtns = EMOJIS.map(e => {
+    const cnt = counts[e]||0; const reacted = myReact===e;
+    return `<button class="react-btn ${reacted?'reacted':''}" onclick="toggleReaction('${rid}',${idx},'${e}')">${e}${cnt?` ${cnt}`:''}</button>`;
+  }).join('');
+  const cmtCnt = ix.comments.length;
+  return `<div class="bm-actions" id="rw_act_${safeK}">
+    ${reactBtns}
+    <button class="comment-toggle" id="rw_ctog_${safeK}" onclick="toggleRwComments('${safeK}')" style="margin-left:4px">💬 ${cmtCnt?cmtCnt+'条':'评论'}</button>
+  </div>
+  <div class="bm-comments" id="rw_cmts_${safeK}">
+    <div id="rw_clist_${safeK}">${renderCommentList(ix.comments)}</div>
+    <div class="comment-input-row">
+      <div class="comment-av" style="background:${avatarColor(currentUser)}">${esc(currentUser[0])}</div>
+      <input class="comment-inp" id="rw_cinp_${safeK}" placeholder="写评论，回车发送…" onkeydown="if(event.key==='Enter'){event.preventDefault();submitRwComment('${rid}',${idx},'${safeK}')}">
+      <button class="comment-send" onclick="submitRwComment('${rid}',${idx},'${safeK}')">↑</button>
+    </div>
+  </div>`;
+}
+
+window.toggleRwComments = function(safeK) {
+  const el = document.getElementById('rw_cmts_'+safeK);
+  if (el) el.classList.toggle('open');
+}
+
+window.submitRwComment = async function(rid, idx, safeK) {
+  const k = ixKey(rid, idx);
+  const inp = document.getElementById('rw_cinp_'+safeK);
+  const text = (inp?.value||'').trim(); if (!text) return;
+  const d = ixGet(); if (!d[k]) d[k]={reactions:{},comments:[]};
+  d[k].comments.push({user:currentUser, text, time:Date.now()});
+  ixSet(d); inp.value='';
+  const clist = document.getElementById('rw_clist_'+safeK);
+  if (clist) clist.innerHTML = renderCommentList(d[k].comments);
+  const tog = document.getElementById('rw_ctog_'+safeK);
+  if (tog) tog.textContent = `💬 ${d[k].comments.length}条`;
+  if (db) { const {doc,setDoc}=window._fs; setDoc(doc(db,'interactions',safeK),d[k]).catch(console.error); }
+}
+
+function buildRandomWalkHtml(pick) {
+  if (!pick) return '<div style="text-align:center;color:var(--sub);padding:20px">还没有书签，先导入一本书吧 📖</div>';
+  const { rid, idx, bm, bookTitle, bookAuthor, userName } = pick;
+  _rwRid = rid; _rwIdx = idx;
+  const [c1, c2] = colorOf(bookTitle);
+  return `
+    <div class="rw-header">
+      <div class="rw-title">🎲 随机漫步 <span style="font-size:.74rem;color:var(--sub);font-weight:400">随机一条书签</span></div>
+      <button class="rw-refresh" onclick="refreshRandom()">🔀 换一条</button>
+    </div>
+    <div class="rw-book-row">
+      <div class="rw-book-icon" style="background:linear-gradient(135deg,${c1},${c2})">${esc(bookTitle[0])}</div>
+      <div>
+        <div style="font-size:.88rem;font-weight:700;line-height:1.3">${esc(bookTitle)}</div>
+        <div style="font-size:.74rem;color:var(--sub)">✍ ${esc(bookAuthor||'未知')} &nbsp;·&nbsp; 👤 ${esc(userName)}</div>
+      </div>
+    </div>
+    <div class="rw-chapter"># ${esc(bm.chapter)}</div>
+    <div class="rw-quote">${esc(bm.original).replace(/\n/g,'<br>')}</div>
+    ${bm.thought?`<div class="rw-thought"><span>💭</span><span>${esc(bm.thought)}</span></div>`:''}
+    ${renderRWActions(rid, idx)}
+  `;
+}
+
+window.refreshRandom = function() {
+  const pick = pickRandomBm();
+  const el = document.getElementById('randomWalkCard');
+  if (el) el.innerHTML = buildRandomWalkHtml(pick);
+}
+
 function renderCommentList(comments){
-  if(!comments.length) return '<div style="font-size:.78rem;color:#ccc;padding:4px 0">暂无评论</div>';
   return comments.map(c=>`
     <div class="comment-item">
       <div class="comment-av" style="background:${avatarColor(c.user)}">${esc(c.user[0])}</div>
@@ -1096,6 +1240,9 @@ window.openBook = function(bk){
   renderBookBody(readings);
   document.getElementById('bookOverlay').classList.add('open');
   document.body.style.overflow='hidden';
+  // 手机上显示「详情」toggle 按钮
+  const toggle = document.getElementById('bDetailToggle');
+  if (toggle) toggle.style.display = window.innerWidth <= 600 ? 'inline-block' : 'none';
 }
 
 window.switchBookUser = function(u){
@@ -1250,6 +1397,15 @@ window.closeOverlay=function(id,e){
   if(e&&e.target!==document.getElementById(id))return;
   document.getElementById(id).classList.remove('open');
   if(id==='bookOverlay')document.body.style.overflow='';
+}
+
+window.toggleBookDetail = function(){
+  const els = [document.getElementById('bDesc'), document.getElementById('bTimeSection'), document.querySelector('.prog-bar')];
+  const btn = document.getElementById('bDetailToggle');
+  const expanded = btn.dataset.expanded === '1';
+  els.forEach(el => { if(el) el.style.setProperty('display', expanded ? 'none' : '', 'important'); });
+  btn.dataset.expanded = expanded ? '0' : '1';
+  btn.textContent = expanded ? '详情 ▾' : '收起 ▴';
 }
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.overlay.open').forEach(o=>o.classList.remove('open'));document.body.style.overflow='';}});
 
