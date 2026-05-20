@@ -296,18 +296,21 @@ body{font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;b
   /* 色条压成细线 */
   .modal-covbar{height:5px !important;border-radius:0}
   /* 压缩标题区 */
-  .modal-head{padding:10px 14px 8px}
-  .modal-title{font-size:1.1rem;margin-bottom:2px}
-  .modal-author-line{font-size:.82rem;margin-bottom:6px}
-  /* 默认隐藏简介/时长/进度条，点「详情」展开 */
-  #bDesc,#bTimeSection,.prog-bar{display:none !important}
-  .modal-meta-row{margin-top:2px}
-  .book-detail-toggle{display:inline-block}
+  .modal-head{padding:10px 14px 6px}
+  .modal-title{font-size:1.05rem;margin-bottom:2px;padding-right:36px}
+  .modal-author-line{font-size:.8rem;margin-bottom:4px}
+  /* 手机默认隐藏可折叠详情区 */
+  #bDetailWrap{display:none}
+  /* 「详情」按钮显示 */
+  #bDetailToggle{display:inline-flex !important;align-items:center}
+  .modal-meta-row{margin-top:2px;align-items:center}
   /* 用户 tabs 单行横滚 */
   .user-tabs{padding:6px 10px;gap:6px;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
   .user-tabs::-webkit-scrollbar{display:none}
   .user-tab{white-space:nowrap;flex-shrink:0;padding:5px 12px;font-size:.78rem}
   .modal-body{padding:12px 12px 40px}
+  /* 章节头不 sticky（modal 内不生效且会遮内容）*/
+  .ch-head{position:static !important;background:transparent}
 
   /* leaderboard */
   .lb-card{padding:16px 14px}
@@ -362,13 +365,16 @@ body{font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;b
         <button class="modal-close" onclick="closeOverlay('bookOverlay')">✕</button>
         <div class="modal-title" id="bTitle"></div>
         <div class="modal-author-line" id="bAuthor"></div>
-        <div class="modal-desc" id="bDesc" style="display:none"></div>
         <div class="modal-meta-row">
           <div id="bTags" class="book-tags"></div>
-          <button class="book-detail-toggle" id="bDetailToggle" onclick="toggleBookDetail()" style="display:none;font-size:.72rem;color:var(--sub);background:none;border:none;cursor:pointer;padding:2px 0;margin-left:auto">详情 ▾</button>
+          <button class="book-detail-toggle" id="bDetailToggle" onclick="toggleBookDetail()" style="display:none;font-size:.72rem;color:var(--sub);background:none;border:none;cursor:pointer;padding:2px 0;margin-left:auto;flex-shrink:0">详情 ▾</button>
         </div>
-        <div id="bTimeSection" style="margin-top:12px"></div>
-        <div class="prog-bar" style="margin-top:8px" title="相对于所有书籍平均时长的比较"><div class="prog-fill" id="bProg" style="width:0%"></div></div>
+        <!-- 可折叠详情区：手机默认隐藏 -->
+        <div id="bDetailWrap">
+          <div class="modal-desc" id="bDesc" style="display:none"></div>
+          <div id="bTimeSection" style="margin-top:12px"></div>
+          <div class="prog-bar" style="margin-top:8px" title="相对于所有书籍平均时长的比较"><div class="prog-fill" id="bProg" style="width:0%"></div></div>
+        </div>
       </div>
     </div>
     <div class="user-tabs" id="bUserTabs"></div>
@@ -1240,9 +1246,11 @@ window.openBook = function(bk){
   renderBookBody(readings);
   document.getElementById('bookOverlay').classList.add('open');
   document.body.style.overflow='hidden';
-  // 手机上显示「详情」toggle 按钮
-  const toggle = document.getElementById('bDetailToggle');
-  if (toggle) toggle.style.display = window.innerWidth <= 600 ? 'inline-block' : 'none';
+  // 每次打开重置详情折叠状态
+  const bDetailWrap = document.getElementById('bDetailWrap');
+  const bDetailToggle = document.getElementById('bDetailToggle');
+  if(bDetailWrap) bDetailWrap.style.display = '';
+  if(bDetailToggle) { bDetailToggle.dataset.expanded = '0'; bDetailToggle.textContent = '详情 ▾'; }
 }
 
 window.switchBookUser = function(u){
@@ -1400,10 +1408,11 @@ window.closeOverlay=function(id,e){
 }
 
 window.toggleBookDetail = function(){
-  const els = [document.getElementById('bDesc'), document.getElementById('bTimeSection'), document.querySelector('.prog-bar')];
+  const wrap = document.getElementById('bDetailWrap');
   const btn = document.getElementById('bDetailToggle');
+  if (!wrap) return;
   const expanded = btn.dataset.expanded === '1';
-  els.forEach(el => { if(el) el.style.setProperty('display', expanded ? 'none' : '', 'important'); });
+  wrap.style.display = expanded ? 'none' : 'block';
   btn.dataset.expanded = expanded ? '0' : '1';
   btn.textContent = expanded ? '详情 ▾' : '收起 ▴';
 }
