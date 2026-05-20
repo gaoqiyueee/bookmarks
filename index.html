@@ -724,6 +724,11 @@ function avatarColor(s){ const c=colorOf(s); return c[1]; }
 function toMin(s){ if(!s)return 0; let m=0; const hr=s.match(/(\d+)小时/); if(hr)m+=+hr[1]*60; const mn=s.match(/(\d+)分钟?/); if(mn)m+=+mn[1]; const sc=s.match(/(\d+)秒/); if(sc)m+=+sc[1]/60; return m; }
 function fmtMin(m){ if(!m)return '—'; if(m<60)return Math.round(m)+'m'; const h=Math.floor(m/60),mm=Math.round(m%60); return mm?`${h}h${mm}m`:`${h}h`; }
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtOrig(s){
+  const paras=String(s||'').split(/\n/).filter(p=>p.trim());
+  if(paras.length<=1) return esc(s||'').replace(/\n/g,'<br>');
+  return paras.map(p=>`<p style="margin:0 0 .3em;text-indent:2em">${esc(p.replace(/^[\s\u3000]+/,''))}</p>`).join('');
+}
 function makeId(u,t,a){ return btoa(encodeURIComponent(`${u}||${t}||${a}`)).replace(/[+/=]/g,'_').slice(0,40); }
 function bookKey(t,a){ return `${t}__${a}`; }
 function showToast(msg,dur=2200){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),dur); }
@@ -1155,7 +1160,7 @@ function buildRandomWalkHtml(pick) {
       </div>
     </div>
     <div class="rw-chapter"># ${esc(bm.chapter)}</div>
-    <div class="rw-quote">${esc(bm.original).replace(/\n/g,'<br>')}</div>
+    <div class="rw-quote">${fmtOrig(bm.original)}</div>
     ${bm.thought?`<div class="rw-thought"><span>💭</span><span>${esc(bm.thought)}</span></div>`:''}
     ${renderRWActions(rid, idx)}
   `;
@@ -1290,7 +1295,7 @@ function renderBookBody(readings){
             ${isMe?'<span style="font-size:.68rem;background:var(--accent-l);color:var(--accent);padding:1px 7px;border-radius:8px;margin-left:2px">我</span>':''}
             <span class="bm-owner-time">⏱ ${fmtMin(toMin(bm.ownerTime))}</span>
           </div>
-          <div class="bm-orig">${esc(bm.original).replace(/\n/g,'<br>')}</div>
+          <div class="bm-orig">${fmtOrig(bm.original)}</div>
           <div class="bm-thought-wrap">
             <span class="bm-thought-icon">💭</span>
             ${isMe
