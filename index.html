@@ -440,7 +440,7 @@ body{font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;b
   </div>
 </div>
 
-<input type="file" id="fileInput" accept=".md" style="display:none" onchange="handleFileInput(event)">
+<input type="file" id="fileInput" accept=".md,.json" style="display:none" onchange="handleFileInput(event)">
 
 <script>
 // ╔══════════════════════════════════════════════════════╗
@@ -840,7 +840,7 @@ const render = {
         <div class="import-bar-icon">📂</div>
         <div class="import-bar-text">
           <div class="import-bar-title">导入书签文件</div>
-          <div class="import-bar-sub">支持 .md 格式，或将文件拖拽到页面上</div>
+          <div class="import-bar-sub">支持 .md / .json 格式，或将文件拖拽到页面上</div>
         </div>
         <button class="btn btn-accent" onclick="event.stopPropagation();document.getElementById('fileInput').click()">选择文件</button>
       </div>
@@ -1342,12 +1342,43 @@ window.filterAuthor=function(author){
 window.handleFileInput=async function(e){
   const f=e.target.files[0];if(!f)return;
   const text=await f.text();
-  await importMd(text);
+  if(f.name.endsWith('.json')) await importBooks(parseJson(text));
+  else await importBooks(parseMd(text));
   e.target.value='';
 }
 
-async function importMd(text){
-  const books=parseMd(text);
+function parseJson(text) {
+  let arr; try{ arr=JSON.parse(text); }catch{ return []; }
+  if(!Array.isArray(arr)||!arr.length) return [];
+  // 按 bookName+bookAuthor 分组
+  const map=new Map();
+  for(const item of arr){
+    const title=(item.bookName||'').trim();
+    const author=(item.bookAuthor||'').trim();
+    if(!title) continue;
+    const key=title+'||'+author;
+    if(!map.has(key)){
+      map.set(key,{
+        title, author,
+        readingTime:'',
+        notes:(item.bookRemark||'').replace(/\n/g,' ').trim(),
+        groups:(item.bookGroupNames||'').split(',').map(s=>s.trim()).filter(Boolean),
+        bookmarks:[]
+      });
+    }
+    const b=map.get(key);
+    const orig=(item.bookText||'').trim();
+    if(!orig) continue;
+    b.bookmarks.push({
+      chapter:(item.chapterName||'').trim()||'未知章节',
+      original:orig,
+      thought:(item.content||'').trim()
+    });
+  }
+  return [...map.values()].filter(b=>b.bookmarks.length);
+}
+
+async function importBooks(books){
   if(!books.length){showToast('未解析到有效书签');return;}
   const existing=getAllReadings();
   let added=0,updated=0;
@@ -1356,13 +1387,11 @@ async function importMd(text){
     const old=existing.find(r=>r.id===id);
     let finalBookmarks;
     if(old){
-      // 增量合并：用"章节+原文"作为唯一键
-      const oldMap=new Map(old.bookmarks.map((bm,i)=>[bm.chapter+'||'+bm.original.slice(0,30), bm]));
+      const oldMap=new Map(old.bookmarks.map(bm=>[bm.chapter+'||'+bm.original.slice(0,30), bm]));
       finalBookmarks=b.bookmarks.map(bm=>{
         const key=bm.chapter+'||'+bm.original.slice(0,30);
         const prev=oldMap.get(key);
-        // 保留已编辑的想法；若新导入有想法且旧的没有，取新的
-        return {...bm, thought: (prev&&prev.thought) ? prev.thought : (bm.thought||'') };
+        return {...bm, thought:(prev&&prev.thought)?prev.thought:(bm.thought||'')};
       });
       updated++;
     } else {
@@ -1373,7 +1402,7 @@ async function importMd(text){
       id, userName:currentUser, bookTitle:b.title, bookAuthor:b.author,
       readingTime:b.readingTime, notes:b.notes, groups:b.groups,
       bookmarks:finalBookmarks,
-      importedAt: old?old.importedAt:Date.now(), updatedAt:Date.now()
+      importedAt:old?old.importedAt:Date.now(), updatedAt:Date.now()
     });
   }
   const msg=[];
@@ -1382,6 +1411,8 @@ async function importMd(text){
   showToast(`导入完成：${msg.join('，')} 📚`);
   renderCurrent();
 }
+
+async function importMd(text){ await importBooks(parseMd(text)); }
 
 window.doDelete=async function(id){
   if(!confirm('确定删除这条书架记录？'))return;
@@ -1429,7 +1460,10 @@ document.addEventListener('dragleave',e=>{if(!e.relatedTarget)document.getElemen
 document.addEventListener('drop',async e=>{
   e.preventDefault();document.getElementById('dragMask').classList.remove('on');
   const f=e.dataTransfer.files[0];
-  if(f&&f.name.endsWith('.md')){const text=await f.text();await importMd(text);}
+  if(!f) return;
+  const text=await f.text();
+  if(f.name.endsWith('.json')) await importBooks(parseJson(text));
+  else if(f.name.endsWith('.md')) await importBooks(parseMd(text));
 });
 
 // ─── EMBED CONFIG HELPER ────────────────────────────────
