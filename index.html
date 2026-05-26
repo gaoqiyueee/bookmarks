@@ -152,6 +152,24 @@ body{font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;b
 /* toast */
 .toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(20px);background:#222;color:#fff;padding:10px 22px;border-radius:24px;font-size:.85rem;z-index:9999;opacity:0;transition:all .3s;pointer-events:none}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* import progress overlay */
+.import-prog-mask{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:8000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.import-prog-mask.on{display:flex}
+.import-prog-card{background:#fff;border-radius:18px;padding:28px 32px;width:min(400px,90vw);box-shadow:0 24px 64px rgba(0,0,0,.25)}
+.import-prog-title{font-size:1rem;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.import-prog-sub{font-size:.8rem;color:var(--sub);margin-bottom:18px}
+.import-prog-step{font-size:.82rem;color:var(--sub);margin-bottom:12px;min-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.import-prog-bar-wrap{height:7px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:10px}
+.import-prog-bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:4px;width:0%;transition:width .25s ease}
+.import-prog-count{font-size:.78rem;color:var(--sub);text-align:right;margin-bottom:0}
+/* import mode choice */
+.import-mode-wrap{display:none;flex-direction:column;gap:10px;margin-top:20px}
+.import-mode-wrap.on{display:flex}
+.import-mode-btn{width:100%;padding:12px 14px;border-radius:11px;border:2px solid var(--border);background:#fff;cursor:pointer;text-align:left;transition:all .18s;font-size:.84rem}
+.import-mode-btn:hover{border-color:var(--accent)}
+.import-mode-btn.merge{border-color:var(--accent);background:var(--accent-l)}
+.import-mode-title{font-weight:700;margin-bottom:4px;font-size:.88rem}
+.import-mode-desc{font-size:.74rem;color:var(--sub);line-height:1.4}
 /* drag */
 .drag-mask{position:fixed;inset:0;background:rgba(200,118,58,.1);border:4px dashed var(--accent);z-index:9000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(10px)}
 .drag-mask.on{display:flex}
@@ -320,6 +338,29 @@ body{font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;b
 <body>
 
 <div class="drag-mask" id="dragMask"><div style="font-size:1.5rem;font-weight:700;color:var(--accent)">📚 松开导入书签文件</div></div>
+<div class="import-prog-mask" id="importProgMask">
+  <div class="import-prog-card">
+    <div class="import-prog-title"><span id="importProgTitle">正在导入…</span></div>
+    <div class="import-prog-sub" id="importProgSub"></div>
+    <div class="import-prog-step" id="importProgStep">解析文件中…</div>
+    <div class="import-prog-bar-wrap"><div class="import-prog-bar" id="importProgBar"></div></div>
+    <div class="import-prog-count" id="importProgCount"></div>
+    <div class="import-mode-wrap" id="importModeWrap">
+      <button class="import-mode-btn merge" onclick="window._importChoose('merge')">
+        <div class="import-mode-title">🔀 合并导入</div>
+        <div class="import-mode-desc">保留已有书签和想法，仅追加新书签</div>
+      </button>
+      <button class="import-mode-btn" onclick="window._importChoose('overwrite')">
+        <div class="import-mode-title">♻️ 覆盖导入</div>
+        <div class="import-mode-desc">用本次文件完全替换同名书的书签</div>
+      </button>
+      <button class="import-mode-btn" id="importModeDatesBtn" style="display:none" onclick="window._importChoose('dates-only')">
+        <div class="import-mode-title">📅 仅补充日期</div>
+        <div class="import-mode-desc">只为现有书签补充保存时间，不增减书签内容</div>
+      </button>
+    </div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <!-- ===== LOGIN ===== -->
@@ -461,6 +502,7 @@ const PRESET_FIREBASE_CONFIG = {
 // ─── FIREBASE DYNAMIC LOADER ───────────────────────────
 let db = null;
 let unsubscribe = null;
+let _importing = false; // 导入期间屏蔽 Firebase 快照覆盖
 
 async function initFirebase(config) {
   try {
@@ -487,7 +529,8 @@ function lsGet() {
 }
 function lsSet(data) {
   _memStore = JSON.parse(JSON.stringify(data));
-  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch {}
+  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); }
+  catch(e) { if(e.name==='QuotaExceededError'||e.code===22) showToast('⚠️ 浏览器存储空间不足，数据仅保存在内存中（刷新后丢失）',5000); }
 }
 
 // ─── CLOUDFLARE KV 同步 ────────────────────────────────
@@ -613,11 +656,20 @@ function startSync() {
   unsubscribe = onSnapshot(
     collection(db, 'readings'),
     snap => {
+      if (_importing) return; // 导入进行中，忽略 Firebase 推送，防止覆盖新数据
       const store = lsGet();
       if (!store.readings) store.readings = {};
       snap.docChanges().forEach(change => {
-        if (change.type === 'removed') delete store.readings[change.doc.id];
-        else store.readings[change.doc.id] = change.doc.data();
+        if (change.type === 'removed') {
+          delete store.readings[change.doc.id];
+        } else {
+          const remote = change.doc.data();
+          const local = store.readings[change.doc.id];
+          // 本地数据更新时间更新 → 保留本地，防止旧 Firebase 快照覆盖刚导入的数据
+          if (!local || (remote.updatedAt||0) >= (local.updatedAt||0)) {
+            store.readings[change.doc.id] = remote;
+          }
+        }
       });
       lsSet(store);
       setBadge('🟢 云同步', true);
@@ -680,7 +732,8 @@ async function manualSync() {
 
 // ─── PARSER ────────────────────────────────────────────
 function parseMd(text) {
-  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n'); // normalize Windows/Mac line endings
+  // 去除 BOM，统一行尾
+  text = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const books = [];
   const parts = text.split(/\n(?=## )/);
   for (const part of parts) {
@@ -690,15 +743,31 @@ function parseMd(text) {
     const hm = lines[0].match(/^## (.+?) - (.+)$/);
     if (hm) { b.title = hm[1].trim(); b.author = hm[2].trim(); }
     else { b.title = lines[0].replace(/^## /, '').trim(); }
-    for (const line of lines) {
-      const tm = line.match(/\*\*阅读时长[：:]\*\*\s*(.+)/); if(tm) b.readingTime = tm[1].trim();
-      const nm = line.match(/\*\*书籍备注[：:]\*\*\s*(.+)/); if(nm) b.notes = nm[1].trim();
-      const gm = line.match(/\*\*分组[：:]\*\*\s*(.+)/); if(gm) b.groups = gm[1].split(',').map(s=>s.trim()).filter(Boolean);
+    // 逐行解析元数据，书籍备注支持多行（直到遇到下一个 ** 字段或空行）
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i];
+      const tm = l.match(/\*\*阅读时长[：:]\*\*\s*(.+)/); if(tm) b.readingTime = tm[1].trim();
+      const gm = l.match(/\*\*分组[：:]\*\*\s*(.+)/);    if(gm) b.groups = gm[1].split(/[,，]/).map(s=>s.trim()).filter(Boolean);
+      const nm = l.match(/\*\*书籍备注[：:]\*\*\s*(.*)/);
+      if (nm) {
+        const noteLines = [nm[1].trim()];
+        // 继续收集后续非空、非元数据行作为备注内容
+        for (let j = i+1; j < lines.length; j++) {
+          const nl = lines[j];
+          if (nl.startsWith('**') || nl.startsWith('####') || nl.startsWith('---') || nl.startsWith('## ')) break;
+          if (nl.trim()) noteLines.push(nl.trim());
+          else if (noteLines.length > 1) break; // 空行结束多行备注
+        }
+        b.notes = noteLines.filter(Boolean).join('\n');
+      }
     }
-    for (const block of part.split(/\n---\n/)) {
+    // 用宽松的 --- 分隔符拆分书签块
+    for (const block of part.split(/\n[ \t]*---[ \t]*\n/)) {
       const cm = block.match(/^#### (.+)$/m); if(!cm) continue;
-      const qi = block.indexOf('> **原文：**'); if(qi<0) continue;
-      const after = block.slice(qi+'> **原文：**'.length).split('\n');
+      const qi = block.search(/> \*\*原文[：:]\*\*/); if(qi<0) continue;
+      // 跳过 "> **原文：**" 这段标记本身
+      const markerEnd = block.indexOf('**', block.indexOf('**', qi)+2) + 2 + 1; // 跳过结尾 **
+      const after = block.slice(markerEnd).split('\n');
       let inQ=true, orig=[], th=[];
       for(let i=0;i<after.length;i++){
         const l=after[i];
@@ -729,7 +798,7 @@ function fmtOrig(s){
   if(paras.length<=1) return esc(s||'').replace(/\n/g,'<br>');
   return paras.map(p=>`<p style="margin:0 0 .3em;text-indent:2em">${esc(p.replace(/^[\s\u3000]+/,''))}</p>`).join('');
 }
-function makeId(u,t,a){ return btoa(encodeURIComponent(`${u}||${t}||${a}`)).replace(/[+/=]/g,'_').slice(0,40); }
+function makeId(u,t,a){ return btoa(encodeURIComponent(`${u}||${t}||${a}`)).replace(/[+/=]/g,'_'); }
 function bookKey(t,a){ return `${t}__${a}`; }
 function showToast(msg,dur=2200){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),dur); }
 
@@ -758,10 +827,39 @@ window.logout = function(){
   document.getElementById('loginScreen').style.display='flex';
 }
 
+// 将所有存储条目的 ID 重算为当前 makeId 生成的完整 ID，去除因旧版 slice(0,40)
+// 导致的 ID 碰撞和重复条目。每次 bootApp 都执行以保证数据始终干净。
+function migrateIds(){
+  const store=lsGet();
+  if(!store.readings) return;
+  const newReadings={};
+  for(const r of Object.values(store.readings)){
+    const newId=makeId(r.userName||'',r.bookTitle||'',r.bookAuthor||'');
+    const prev=newReadings[newId];
+    if(!prev){
+      newReadings[newId]={...r,id:newId};
+    } else {
+      // 合并两条重复记录的书签取并集，优先保留 thought/savedAt
+      const merged=new Map(prev.bookmarks.map(bm=>[bm.chapter+'||'+bm.original.slice(0,30),bm]));
+      for(const bm of (r.bookmarks||[])){
+        const k=bm.chapter+'||'+bm.original.slice(0,30);
+        const existing=merged.get(k);
+        merged.set(k, existing
+          ? {...bm, thought:existing.thought||bm.thought||'', savedAt:existing.savedAt||bm.savedAt||undefined}
+          : bm);
+      }
+      newReadings[newId]={...prev, bookmarks:[...merged.values()]};
+    }
+  }
+  store.readings=newReadings;
+  lsSet(store);
+}
+
 function bootApp(){
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('app').style.display='flex';
   document.getElementById('userChip').textContent = '👤 '+currentUser;
+  migrateIds();
   const store = lsGet();
   const cfg = PRESET_FIREBASE_CONFIG || store.firebaseConfig;
   if(cfg){ initFirebase(cfg).then(ok=>{ if(ok) startSync(); }); }
@@ -1294,6 +1392,7 @@ function renderBookBody(readings){
             <span class="bm-owner-name">${esc(bm.owner)}</span>
             ${isMe?'<span style="font-size:.68rem;background:var(--accent-l);color:var(--accent);padding:1px 7px;border-radius:8px;margin-left:2px">我</span>':''}
             <span class="bm-owner-time">⏱ ${fmtMin(toMin(bm.ownerTime))}</span>
+            ${bm.savedAt?`<span style="font-size:.68rem;color:var(--sub);margin-left:auto">${new Date(bm.savedAt).toLocaleDateString('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit'})}</span>`:''}
           </div>
           <div class="bm-orig">${fmtOrig(bm.original)}</div>
           <div class="bm-thought-wrap">
@@ -1339,18 +1438,70 @@ window.filterAuthor=function(author){
 }
 
 // ─── FILE IMPORT ────────────────────────────────────────
+function showImportProg(title, step, pct, count, sub){
+  const mask=document.getElementById('importProgMask');
+  if(title===null){ mask.classList.remove('on'); return; }
+  mask.classList.add('on');
+  document.getElementById('importProgTitle').textContent=title;
+  document.getElementById('importProgSub').textContent=sub||'';
+  document.getElementById('importProgStep').textContent=step;
+  document.getElementById('importProgBar').style.width=pct+'%';
+  document.getElementById('importProgCount').textContent=count||'';
+  // hide choice buttons unless explicitly shown
+  document.getElementById('importModeWrap').classList.remove('on');
+}
+
+function showImportModeChoice(sub, showDatesOnly=false){
+  document.getElementById('importProgMask').classList.add('on');
+  document.getElementById('importProgTitle').textContent='选择导入方式';
+  document.getElementById('importProgSub').textContent=sub||'';
+  document.getElementById('importProgStep').textContent='';
+  document.getElementById('importProgBar').style.width='100%';
+  document.getElementById('importProgCount').textContent='';
+  document.getElementById('importModeDatesBtn').style.display=showDatesOnly?'':'none';
+  document.getElementById('importModeWrap').classList.add('on');
+}
+
+// resolves with 'merge' | 'overwrite' | 'dates-only'
+function waitImportChoice(){
+  return new Promise(resolve=>{window._importChoose=resolve;});
+}
+
+async function runImport(text, isJson){
+  showImportProg('📥 正在导入…','解析书签内容…',20,'');
+  await new Promise(r=>setTimeout(r,0));
+  const books=isJson?parseJson(text):parseMd(text);
+  if(!books.length){ showImportProg(null); showToast('未解析到有效书签'); return; }
+  const totalParsed=books.reduce((a,b)=>a+b.bookmarks.length,0);
+
+  // 检查是否有已存在的书（按书名+作者匹配，避免因 ID 格式差异导致漏判）
+  const existing=getAllReadings();
+  const existingKeys=new Set(existing.map(r=>`${r.bookTitle}__${r.bookAuthor}`));
+  const hasConflict=books.some(b=>existingKeys.has(`${b.title}__${b.author}`));
+  let mode='merge';
+  if(hasConflict){
+    showImportModeChoice(`解析到 ${books.length} 本书 · ${totalParsed} 条书签，其中有书籍已存在`, isJson);
+    mode=await waitImportChoice();
+  }
+
+  showImportProg('📥 正在导入…',`已解析 ${books.length} 本书，共 ${totalParsed} 条书签`,40,'开始写入…');
+  await new Promise(r=>setTimeout(r,0));
+  await importBooks(books, isJson, mode);
+  showImportProg(null);
+}
+
 window.handleFileInput=async function(e){
-  const f=e.target.files[0];if(!f)return;
+  const f=e.target.files[0]; if(!f) return;
+  showImportProg('📥 正在导入…','读取文件中…',5,'');
+  await new Promise(r=>setTimeout(r,0));
   const text=await f.text();
-  if(f.name.endsWith('.json')) await importBooks(parseJson(text));
-  else await importBooks(parseMd(text));
+  await runImport(text, f.name.endsWith('.json'));
   e.target.value='';
 }
 
 function parseJson(text) {
   let arr; try{ arr=JSON.parse(text); }catch{ return []; }
   if(!Array.isArray(arr)||!arr.length) return [];
-  // 按 bookName+bookAuthor 分组
   const map=new Map();
   for(const item of arr){
     const title=(item.bookName||'').trim();
@@ -1369,46 +1520,188 @@ function parseJson(text) {
     const b=map.get(key);
     const orig=(item.bookText||'').trim();
     if(!orig) continue;
-    b.bookmarks.push({
-      chapter:(item.chapterName||'').trim()||'未知章节',
-      original:orig,
-      thought:(item.content||'').trim()
-    });
+    const bm={chapter:(item.chapterName||'').trim()||'未知章节',original:orig,thought:(item.content||'').trim()};
+    if(item.time&&Number.isFinite(+item.time)) bm.savedAt=+item.time;
+    b.bookmarks.push(bm);
   }
   return [...map.values()].filter(b=>b.bookmarks.length);
 }
 
-async function importBooks(books){
+async function importBooks(books, fromJson=false, mode='merge'){
   if(!books.length){showToast('未解析到有效书签');return;}
+  _importing = true; // 屏蔽 Firebase 快照覆盖
   const existing=getAllReadings();
-  let added=0,updated=0;
-  for(const b of books){
+  let added=0,updated=0,totalBm=0;
+  const n=books.length;
+
+  // JSON 导入时建立 chapter+orig30 → savedAt 映射，用于给旧 MD 书签补日期
+  const jsonDateMap = fromJson ? new Map() : null;
+  if(fromJson){
+    for(const b of books)
+      for(const bm of b.bookmarks)
+        if(bm.savedAt) jsonDateMap.set(bm.chapter+'||'+bm.original.slice(0,30), bm.savedAt);
+  }
+
+  // ── 仅补充日期模式（dates-only）──────────────────────────────────────
+  if(mode==='dates-only'){
+    let datesAdded=0;
+    for(let bi=0;bi<existing.length;bi++){
+      const r=existing[bi];
+      if(r.userName!==currentUser) continue;
+      const pct=Math.round(40+(bi/existing.length)*55);
+      showImportProg('📅 补充日期中…',`处理《${(r.bookTitle||'').slice(0,16)}》`,pct,`${bi+1} / ${existing.length}`);
+      await new Promise(res=>setTimeout(res,0));
+      let changed=false;
+      const newBms=r.bookmarks.map(bm=>{
+        const k=bm.chapter+'||'+bm.original.slice(0,30);
+        if(!bm.savedAt && jsonDateMap&&jsonDateMap.has(k)){
+          datesAdded++;
+          changed=true;
+          return {...bm,savedAt:jsonDateMap.get(k)};
+        }
+        return bm;
+      });
+      if(changed){
+        try{
+          await saveReading({...r,bookmarks:newBms,updatedAt:Date.now()});
+          updated++;
+          totalBm+=newBms.length;
+        }catch(e){ console.error('补充日期失败:',r.bookTitle,e); }
+      } else {
+        totalBm+=r.bookmarks.length;
+      }
+    }
+    _importing=false;
+    const realCount=getAllReadings().filter(r=>r.userName===currentUser);
+    const realBm=realCount.reduce((a,r)=>a+r.bookmarks.length,0);
+    showImportProg('✅ 日期补充完成','正在刷新书架…',100,`已为 ${datesAdded} 条书签补充时间`);
+    await new Promise(r=>setTimeout(r,800));
+    showToast(`已为 ${datesAdded} 条书签补充保存日期 📅`, 3500);
+    renderCurrent();
+    showImportProg(null);
+    return;
+  }
+
+  // ── 覆盖模式：先备份全部想法/日期 → 清空该用户所有书 → 全量写入 ──────
+  if(mode==='overwrite'){
+    // 1. 备份当前用户所有书签的 thought + savedAt
+    const thoughtBak=new Map();
+    for(const r of existing){
+      if(r.userName!==currentUser) continue;
+      for(const bm of (r.bookmarks||[])){
+        const k=bm.chapter+'||'+bm.original.slice(0,30);
+        if(bm.thought||bm.savedAt) thoughtBak.set(k,{thought:bm.thought||'',savedAt:bm.savedAt||undefined});
+      }
+    }
+    // 2. 删除该用户所有现有书
+    showImportProg('♻️ 覆盖导入…','清空旧书架…',30,'');
+    await new Promise(r=>setTimeout(r,0));
+    for(const r of existing){
+      if(r.userName===currentUser) await deleteReading(r.id);
+    }
+    // 3. 全量写入新书，匹配回 thought/savedAt
+    for(let bi=0;bi<n;bi++){
+      const b=books[bi];
+      const pct=Math.round(40+(bi/n)*55);
+      showImportProg('♻️ 覆盖导入…',`写入《${b.title.slice(0,16)}${b.title.length>16?'…':''}》`,pct,`${bi+1} / ${n} 本`);
+      await new Promise(r=>setTimeout(r,0));
+      const id=makeId(currentUser,b.title,b.author);
+      const finalBookmarks=b.bookmarks.map(bm=>{
+        const k=bm.chapter+'||'+bm.original.slice(0,30);
+        const bak=thoughtBak.get(k);
+        return bak ? {...bm, thought:bak.thought||bm.thought||'', savedAt:bak.savedAt||bm.savedAt||undefined} : bm;
+      });
+      // JSON 补日期
+      if(fromJson)
+        finalBookmarks.forEach((_,i)=>{
+          const k=finalBookmarks[i].chapter+'||'+finalBookmarks[i].original.slice(0,30);
+          if(!finalBookmarks[i].savedAt&&jsonDateMap.has(k)) finalBookmarks[i]={...finalBookmarks[i],savedAt:jsonDateMap.get(k)};
+        });
+      totalBm+=finalBookmarks.length;
+      added++;
+      try{
+        await saveReading({
+          id, userName:currentUser, bookTitle:b.title, bookAuthor:b.author,
+          readingTime:b.readingTime||'', notes:b.notes||'',
+          groups:b.groups||[],
+          bookmarks:finalBookmarks,
+          importedAt:Date.now(), updatedAt:Date.now()
+        });
+      }catch(e){ console.error('保存书籍失败:',b.title,e); }
+    }
+    _importing=false;
+    const realCount=getAllReadings().filter(r=>r.userName===currentUser);
+    const realBm=realCount.reduce((a,r)=>a+r.bookmarks.length,0);
+    showImportProg('✅ 覆盖完成','正在刷新书架…',100,`当前共 ${realCount.length} 本书 · ${realBm} 条书签`);
+    await new Promise(r=>setTimeout(r,800));
+    showToast(`覆盖完成：共 ${realCount.length} 本书 · ${realBm} 条书签 📚`, 3500);
+    renderCurrent();
+    showImportProg(null);
+    return;
+  }
+
+  // ── 合并模式 ───────────────────────────────────────────────────────────
+  for(let bi=0;bi<n;bi++){
+    const b=books[bi];
+    const pct=Math.round(40+(bi/n)*55);
+    showImportProg('📥 正在导入…',`处理《${b.title.slice(0,16)}${b.title.length>16?'…':''}》`,pct,`${bi+1} / ${n} 本`);
+    await new Promise(r=>setTimeout(r,0));
+
     const id=makeId(currentUser,b.title,b.author);
     const old=existing.find(r=>r.id===id);
     let finalBookmarks;
-    if(old){
-      const oldMap=new Map(old.bookmarks.map(bm=>[bm.chapter+'||'+bm.original.slice(0,30), bm]));
-      finalBookmarks=b.bookmarks.map(bm=>{
+
+    if(old && mode==='merge'){
+      // 并集合并：旧书签为底，新书签追加；已有条目保留想法和日期
+      const oldMap=new Map(old.bookmarks.map(bm=>[bm.chapter+'||'+bm.original.slice(0,30),bm]));
+      for(const bm of b.bookmarks){
         const key=bm.chapter+'||'+bm.original.slice(0,30);
         const prev=oldMap.get(key);
-        return {...bm, thought:(prev&&prev.thought)?prev.thought:(bm.thought||'')};
-      });
+        oldMap.set(key, prev
+          ? {...prev, thought:prev.thought||(bm.thought||''), savedAt:prev.savedAt||(bm.savedAt||undefined)}
+          : bm);
+      }
+      // JSON 导入时给旧 MD 书签补日期
+      if(fromJson)
+        for(const [k,bm] of oldMap)
+          if(!bm.savedAt && jsonDateMap.has(k)) oldMap.set(k,{...bm,savedAt:jsonDateMap.get(k)});
+      finalBookmarks=[...oldMap.values()];
       updated++;
     } else {
+      // 合并模式下文件里有但本地没有的新书，直接追加
       finalBookmarks=b.bookmarks;
       added++;
     }
-    await saveReading({
-      id, userName:currentUser, bookTitle:b.title, bookAuthor:b.author,
-      readingTime:b.readingTime, notes:b.notes, groups:b.groups,
-      bookmarks:finalBookmarks,
-      importedAt:old?old.importedAt:Date.now(), updatedAt:Date.now()
-    });
+
+    totalBm+=finalBookmarks.length;
+    try {
+      await saveReading({
+        id, userName:currentUser, bookTitle:b.title, bookAuthor:b.author,
+        readingTime: b.readingTime||(old?old.readingTime:''),
+        notes: b.notes||(old?old.notes:''),
+        groups: b.groups.length?b.groups:(old?old.groups:[]),
+        bookmarks:finalBookmarks,
+        importedAt:old?old.importedAt:Date.now(), updatedAt:Date.now()
+      });
+    } catch(e) {
+      console.error('保存书籍失败:', b.title, e);
+    }
   }
+
+  _importing = false; // 解除屏蔽
+
+  // 读取实际存储结果，用真实数量展示
+  const realCount = getAllReadings().filter(r=>r.userName===currentUser);
+  const realBm = realCount.reduce((a,r)=>a+r.bookmarks.length,0);
+
+  showImportProg('✅ 导入完成','正在刷新书架…',100,`当前共 ${realCount.length} 本书 · ${realBm} 条书签`);
+  await new Promise(r=>setTimeout(r,800));
+
   const msg=[];
   if(added) msg.push(`新增 ${added} 本`);
-  if(updated) msg.push(`更新 ${updated} 本`);
-  showToast(`导入完成：${msg.join('，')} 📚`);
+  if(updated) msg.push(`${mode==='overwrite'?'覆盖':'更新'} ${updated} 本`);
+  msg.push(`共 ${realBm} 条书签`);
+  showToast(`导入完成：${msg.join('，')} 📚`, 3500);
   renderCurrent();
 }
 
@@ -1459,11 +1752,11 @@ document.addEventListener('dragover',e=>{e.preventDefault();document.getElementB
 document.addEventListener('dragleave',e=>{if(!e.relatedTarget)document.getElementById('dragMask').classList.remove('on');});
 document.addEventListener('drop',async e=>{
   e.preventDefault();document.getElementById('dragMask').classList.remove('on');
-  const f=e.dataTransfer.files[0];
-  if(!f) return;
+  const f=e.dataTransfer.files[0]; if(!f) return;
+  showImportProg('📥 正在导入…','读取文件中…',5,'');
+  await new Promise(r=>setTimeout(r,0));
   const text=await f.text();
-  if(f.name.endsWith('.json')) await importBooks(parseJson(text));
-  else if(f.name.endsWith('.md')) await importBooks(parseMd(text));
+  await runImport(text, f.name.endsWith('.json'));
 });
 
 // ─── EMBED CONFIG HELPER ────────────────────────────────
